@@ -38,7 +38,7 @@ export EOU_STOP_HISTORY="800"        # ms of silence before finalizing a segment
 export EOU_STOP_THRESHOLD="0.98"     # fraction of that window that must be silent
 export EOU_START_HISTORY="300"       # ms window to detect speech start
 export EOU_START_THRESHOLD="0.2"
-export COMMIT_INTERVAL_SEC="2.0"     # only used when ASR_ENDPOINTING="false"
+export COMMIT_INTERVAL_SEC="0.75"    # only used when ASR_ENDPOINTING="false"; lower = snappier
 
 # ---- Web server bind ------------------------------------------------------
 HOST="0.0.0.0"
