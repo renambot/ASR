@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# GO — start the Live ASR web app.
+#
+# Every setting is defined right here in this file. Edit the values below and
+# run `./GO`. No environment setup needed.
+#
+set -euo pipefail
+
+# ===========================================================================
+# EDIT THESE
+# ===========================================================================
+
+# ---- NIM (upstream ASR) ---------------------------------------------------
+export NIM_SCHEME="wss"                    # ws or wss
+export NIM_HOST="arcade.evl.uic.edu"          # <-- your host
+export NIM_PORT="443"                      # 443 via nginx, or 7777 direct to NIM
+export NIM_PATH="/asr/v1/realtime"         # /v1/realtime if hitting the NIM directly
+export NIM_INTENT="transcription"
+export NIM_API_KEY=""                      # optional bearer token; "" = none
+
+# ---- ASR options ----------------------------------------------------------
+export ASR_MODEL="cache-aware-parakeet-rnnt-en-US-asr-streaming-sortformer"  # the model your NIM loaded
+export ASR_LANGUAGE="en-US"
+export SAMPLE_RATE="16000"
+export AUTO_PUNCT="true"
+export AUDIO_QUEUE_MAX="100"
+
+# Speaker diarization (label who is speaking). Needs the sortformer model.
+export ASR_DIARIZATION="true"
+export ASR_MAX_SPEAKERS="8"
+
+# ---- Segmentation --------------------------------------------------------
+# Endpointing ON = the NIM finalizes on natural speech pauses (recommended).
+# Endpointing OFF = fall back to committing the buffer every COMMIT_INTERVAL_SEC.
+export ASR_ENDPOINTING="false"
+export EOU_STOP_HISTORY="800"        # ms of silence before finalizing a segment
+export EOU_STOP_THRESHOLD="0.98"     # fraction of that window that must be silent
+export EOU_START_HISTORY="300"       # ms window to detect speech start
+export EOU_START_THRESHOLD="0.2"
+export COMMIT_INTERVAL_SEC="2.0"     # only used when ASR_ENDPOINTING="false"
+
+# ---- Web server bind ------------------------------------------------------
+HOST="0.0.0.0"
+PORT="8080"
+
+# ---- TLS (serve page over https; needed for mic access off localhost) -----
+# Set both to a file path to enable; leave "" to serve over http.
+SSL_CERT=""
+SSL_KEY=""
+
+# ===========================================================================
+# (below here you shouldn't need to change anything)
+# ===========================================================================
+
+SSL_ARGS=()
+SSL_ON="no"
+if [[ -n "$SSL_CERT" && -n "$SSL_KEY" ]]; then
+  SSL_ARGS=(--ssl-certfile "$SSL_CERT" --ssl-keyfile "$SSL_KEY")
+  SSL_ON="yes"
+fi
+
+# Locate uvicorn (prefer the project venv).
+cd "$(dirname "$0")"
+if [[ -x ".venv/bin/uvicorn" ]]; then
+  UVICORN=".venv/bin/uvicorn"
+elif command -v uvicorn >/dev/null 2>&1; then
+  UVICORN="uvicorn"
+else
+  echo "error: uvicorn not found. Create the venv first:" >&2
+  echo "  python3 -m venv .venv && .venv/bin/pip install -r requirements.txt" >&2
+  exit 1
+fi
+
+echo "Live ASR  ->  http://${HOST}:${PORT}"
+echo "Upstream  ->  ${NIM_SCHEME}://${NIM_HOST}:${NIM_PORT}${NIM_PATH}?intent=${NIM_INTENT}"
+echo "Model=${ASR_MODEL:-default}  Lang=${ASR_LANGUAGE}  Rate=${SAMPLE_RATE}  Punct=${AUTO_PUNCT}"
+[[ "$SSL_ON" == "yes" ]] && echo "TLS       ->  enabled"
+echo
+
+# ${arr[@]+...} guard keeps this working with an empty array under `set -u`
+# on macOS's stock bash 3.2.
+exec "$UVICORN" server:app --host "$HOST" --port "$PORT" ${SSL_ARGS[@]+"${SSL_ARGS[@]}"}
