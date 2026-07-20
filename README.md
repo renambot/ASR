@@ -100,7 +100,7 @@ Then open **http://localhost:8080**.
 | `LLM_MODEL` / `LLM_API_KEY` | *(empty)* | model name and optional bearer token for that endpoint |
 | `LLM_SYSTEM_PROMPT` | *(built-in)* | what the LLM does with the transcript (default: summary + action items) |
 | `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SEC` | `0.2` / `1024` / `120` | generation settings |
-| `ANALYZERS_CONFIG` | `./analyzers.json` | JSON file with the default background analyzer prompts (topics, suggestions, ...) |
+| `ANALYZERS_CONFIG` | `./analyzers.json` | JSON file with the default background analyzer prompts (max 5). Each runs on a schedule chosen in the Admin tab: every N minutes, chained after the previous prompt (receiving its output as context), or once when the recording stops |
 | `ADMIN_TOKEN` | *(empty)* | shared secret for the Admin tab / `/admin/analyzers` endpoints; empty = open |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |

@@ -132,12 +132,25 @@ ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
 _analyzers: list = []
 
 
+MAX_ANALYZERS = 5
+ANALYZER_MODES = ("interval", "chain", "on_stop")
+
+
 def _validate_analyzers(items) -> list:
-    """Normalize and validate an analyzer list; raises ValueError on bad input."""
+    """Normalize and validate an analyzer list; raises ValueError on bad input.
+
+    Schedule modes:
+      interval -- runs every `interval_min` minutes (gated by min_new_chars)
+      chain    -- runs right after the previous analyzer in the list has run,
+                  receiving that analyzer's output as extra context
+      on_stop  -- runs once when the recording is stopped (end of meeting)
+    """
     if not isinstance(items, list):
         raise ValueError("analyzers must be a list")
+    if len(items) > MAX_ANALYZERS:
+        raise ValueError(f"at most {MAX_ANALYZERS} analyzers are allowed")
     out, seen = [], set()
-    for it in items:
+    for idx, it in enumerate(items):
         if not isinstance(it, dict):
             raise ValueError("each analyzer must be an object")
         aid = str(it.get("id", "")).strip()
@@ -148,11 +161,21 @@ def _validate_analyzers(items) -> list:
         if aid in seen:
             raise ValueError(f"duplicate analyzer id: {aid}")
         seen.add(aid)
+        mode = str(it.get("mode", "interval")).strip()
+        if mode not in ANALYZER_MODES:
+            raise ValueError(f"invalid mode {mode!r} (use interval, chain, or on_stop)")
+        if mode == "chain" and idx == 0:
+            raise ValueError("the first analyzer cannot be 'after previous' (nothing before it)")
+        # Back-compat: accept old interval_sec configs.
+        interval_min = it.get("interval_min")
+        if interval_min is None and it.get("interval_sec") is not None:
+            interval_min = float(it["interval_sec"]) / 60
         out.append({
             "id": aid,
             "name": name,
             "prompt": prompt,
-            "interval_sec": max(5, int(float(it.get("interval_sec", 60)))),
+            "mode": mode,
+            "interval_min": max(1, int(float(interval_min or 5))),
             "min_new_chars": max(0, int(float(it.get("min_new_chars", 200)))),
             "enabled": bool(it.get("enabled", True)),
         })
@@ -291,6 +314,7 @@ class Bridge:
         # Server-side copy of finalized segments, used by the background
         # analyzers ("Speaker N: text" lines when diarization is on).
         self.transcript_lines: list[str] = []
+        self._finalizing = False  # a stop/finalize is already in progress
 
     # -- browser -> queue ---------------------------------------------------
     async def read_browser(self) -> None:
@@ -349,7 +373,11 @@ class Bridge:
             # last utterance isn't lost. The browser waits briefly before closing.
             self.flush.set()
         elif etype == "stop":
-            self.stop.set()
+            # Run end-of-meeting analyzers while the socket is still open,
+            # then tear down. Guard against duplicate stop messages.
+            if not self._finalizing:
+                self._finalizing = True
+                asyncio.create_task(self._finalize())
 
     # -- NIM connection manager --------------------------------------------
     async def run_nim(self) -> None:
@@ -503,13 +531,17 @@ class Bridge:
 
     # -- background analyzers ------------------------------------------------
     async def run_analyzers(self) -> None:
-        """Periodically run each enabled analyzer prompt over the transcript.
+        """Periodically run the analyzer prompts over the transcript.
 
         The registry is re-read every tick, so Admin-tab edits apply to
-        sessions already in progress. Each analyzer keeps its own schedule:
-        it fires when its interval has elapsed AND at least min_new_chars of
-        new transcript accumulated since its last run (cost control)."""
-        state: dict[str, dict] = {}  # analyzer id -> {"last": t, "len": n}
+        sessions already in progress. Analyzers are processed sequentially in
+        list order so 'chain' entries can fire right after their predecessor,
+        with that predecessor's output as extra context:
+          interval -- due when interval_min elapsed AND min_new_chars of new
+                      transcript accumulated since its last run
+          chain    -- due when the previous analyzer in the list just ran
+          on_stop  -- skipped here; handled by _finalize() on Stop."""
+        self._analyzer_state: dict[str, dict] = {}  # id -> {"last": t, "len": n}
         while not self.stop.is_set():
             try:
                 await asyncio.wait_for(self.stop.wait(), timeout=ANALYZER_TICK_SEC)
@@ -520,36 +552,89 @@ class Bridge:
                 continue
             text = "\n".join(self.transcript_lines)
             now = time.monotonic()
-            jobs = []
+            prev_ran, prev_name, prev_result = False, None, None
             for a in _analyzers:
+                if self.stop.is_set():
+                    break
+                due = False
                 if not a.get("enabled", True):
+                    prev_ran = False
                     continue
-                st = state.setdefault(a["id"], {"last": 0.0, "len": 0})
-                if now - st["last"] < a["interval_sec"]:
-                    continue
-                if len(text) - st["len"] < a["min_new_chars"]:
-                    continue
-                st["last"] = now
-                st["len"] = len(text)
-                jobs.append(self._run_analyzer(a, text))
-            if jobs:
-                await asyncio.gather(*jobs, return_exceptions=True)
+                if a["mode"] == "interval":
+                    st = self._analyzer_state.setdefault(a["id"], {"last": 0.0, "len": 0})
+                    if (now - st["last"] >= a["interval_min"] * 60
+                            and len(text) - st["len"] >= a["min_new_chars"]):
+                        st["last"] = now
+                        st["len"] = len(text)
+                        due = True
+                elif a["mode"] == "chain":
+                    due = prev_ran
+                # on_stop: never due in the periodic loop
+                if due:
+                    result = await self._run_analyzer(
+                        a, text, prev_name=prev_name if a["mode"] == "chain" else None,
+                        prev_result=prev_result if a["mode"] == "chain" else None)
+                    prev_ran, prev_name, prev_result = result is not None, a["name"], result
+                else:
+                    prev_ran = False
 
-    async def _run_analyzer(self, analyzer: dict, text: str) -> None:
+    async def run_on_stop_analyzers(self) -> None:
+        """Run the end-of-meeting analyzers (mode on_stop), in list order.
+        A 'chain' analyzer directly after one of these runs too, with its
+        output as context."""
+        # Give the flushed last segment a moment to come back from the NIM.
+        await asyncio.sleep(1.0)
+        text = "\n".join(self.transcript_lines)
+        if not text.strip() or not LLM_BASE_URL:
+            return
+        prev_ran, prev_name, prev_result = False, None, None
+        for a in _analyzers:
+            if not a.get("enabled", True):
+                prev_ran = False
+                continue
+            due = a["mode"] == "on_stop" or (a["mode"] == "chain" and prev_ran)
+            if due:
+                result = await self._run_analyzer(
+                    a, text, prev_name=prev_name if a["mode"] == "chain" else None,
+                    prev_result=prev_result if a["mode"] == "chain" else None)
+                prev_ran, prev_name, prev_result = result is not None, a["name"], result
+            else:
+                prev_ran = False
+
+    async def _run_analyzer(self, analyzer: dict, text: str,
+                            prev_name: str | None = None,
+                            prev_result: str | None = None):
+        """Run one analyzer; returns its result text, or None on error."""
+        user = text
+        if prev_result is not None:
+            user += (f"\n\n---\nOutput of the previous analyzer "
+                     f"\"{prev_name}\":\n{prev_result}")
         try:
-            out = await llm_chat(analyzer["prompt"], text)
+            out = await llm_chat(analyzer["prompt"], user)
         except RuntimeError as exc:
             await send_json(self.browser, {
                 "type": "analysis", "id": analyzer["id"], "name": analyzer["name"],
                 "error": str(exc), "ts": time.time(),
             })
-            return
-        log.info("analyzer %r: %d chars -> %d chars",
-                 analyzer["id"], len(text), len(out["result"]))
+            return None
+        log.info("analyzer %r (%s): %d chars -> %d chars",
+                 analyzer["id"], analyzer["mode"], len(user), len(out["result"]))
         await send_json(self.browser, {
             "type": "analysis", "id": analyzer["id"], "name": analyzer["name"],
             "result": out["result"], "ts": time.time(),
         })
+        return out["result"]
+
+    async def _finalize(self) -> None:
+        """Handle Stop from the browser: run the on_stop analyzers while the
+        socket is still open, tell the client we're done, then tear down."""
+        try:
+            await self.run_on_stop_analyzers()
+        except Exception:  # noqa: BLE001 - never let finalize wedge teardown
+            log.exception("on_stop analyzers failed")
+        finally:
+            await send_json(self.browser, {"type": "session_end"})
+            self.stop.set()
 
     async def serve(self) -> None:
         """Run the browser reader, the NIM manager, and the analyzer loop

@@ -3,7 +3,8 @@
     "id": "topics",
     "name": "Topics",
     "prompt": "You are given the running transcript of a live meeting, possibly with speaker labels. List the main topics discussed so far as short bullet points (max 8). Plain text only, most recent topics last.",
-    "interval_sec": 60,
+    "mode": "interval",
+    "interval_min": 1,
     "min_new_chars": 300,
     "enabled": true
   },
@@ -11,8 +12,18 @@
     "id": "suggestions",
     "name": "Suggestions",
     "prompt": "You are given the running transcript of a live meeting. Based on what is being discussed, suggest up to 5 concrete resources, next steps, or questions the participants may find useful right now. Short bullet points, plain text only.",
-    "interval_sec": 90,
+    "mode": "interval",
+    "interval_min": 2,
     "min_new_chars": 400,
+    "enabled": true
+  },
+  {
+    "id": "final-summary",
+    "name": "Meeting Summary",
+    "prompt": "The meeting has just ended. You are given its full transcript, possibly with speaker labels. Write a concise summary, then list decisions and action items with owners when identifiable. Plain text only.",
+    "mode": "on_stop",
+    "interval_min": 5,
+    "min_new_chars": 0,
     "enabled": true
   }
 ]

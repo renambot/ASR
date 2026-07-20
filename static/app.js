@@ -67,6 +67,7 @@ let interimText = "";   // current in-progress hypothesis (grey text)
 let startTime = 0;
 let elapsedTimer = null;
 let wantReconnect = false; // auto-reconnect the browser<->proxy socket while running
+let sessionEndResolve = null; // resolves when the server sends session_end after stop
 
 // --- Speaker naming (diarization) ---
 // Custom names entered in the side panel, keyed by the raw speaker id the NIM
@@ -252,6 +253,8 @@ function connectWS() {
 
   ws.onopen = () => setState("connected", "listening");
   ws.onclose = () => {
+    // Don't leave stop() hanging if the socket dies during finalization.
+    if (sessionEndResolve) { sessionEndResolve(); sessionEndResolve = null; }
     // If the socket drops mid-session, reconnect; otherwise it was a normal stop.
     if (running && wantReconnect) {
       setState("reconnecting", "reconnecting…");
@@ -292,6 +295,9 @@ function connectWS() {
       }
     } else if (msg.type === "analysis") {
       renderAnalysis(msg);
+    } else if (msg.type === "session_end") {
+      // Server finished the end-of-meeting analyzers; stop() may be waiting.
+      if (sessionEndResolve) { sessionEndResolve(); sessionEndResolve = null; }
     } else if (msg.type === "error") {
       setState("error", "ASR error");
       console.error("ASR error:", msg.message);
@@ -381,11 +387,17 @@ async function stop() {
   if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
 
   // Ask the server to finalize the last buffered audio, then wait briefly for
-  // that final transcript to arrive before closing (so it isn't lost).
+  // that final transcript to arrive. After "stop", the server runs any
+  // end-of-meeting analyzers while the socket is still open, so wait for its
+  // session_end message (bounded) before closing so those results land.
   if (ws && ws.readyState === WebSocket.OPEN) {
     try { ws.send(JSON.stringify({ type: "flush" })); } catch {}
     await new Promise((r) => setTimeout(r, 1200));
+    const ended = new Promise((r) => { sessionEndResolve = r; });
     try { ws.send(JSON.stringify({ type: "stop" })); } catch {}
+    setState("reconnecting", "finalizing…");
+    await Promise.race([ended, new Promise((r) => setTimeout(r, 120000))]);
+    sessionEndResolve = null;
     ws.close();
   }
   ws = null;
@@ -574,6 +586,9 @@ function adminHeaders() {
   return h;
 }
 
+const SCHEDULE_INTERVALS = [1, 2, 5, 10, 15, 30]; // minutes
+const MAX_ANALYZERS = 5;
+
 function adminItemRow(a) {
   const item = document.createElement("div");
   item.className = "admin-item";
@@ -591,19 +606,51 @@ function adminItemRow(a) {
 
   const row = document.createElement("div");
   row.className = "row";
-  const mk = (label, field, value) => {
-    const span = document.createElement("span");
-    span.textContent = label;
-    const inp = document.createElement("input");
-    inp.type = "number";
-    inp.value = value;
-    inp.dataset.field = field;
-    row.appendChild(span);
-    row.appendChild(inp);
-    return inp;
+
+  // Schedule selector: fixed cadence in minutes, chained after the previous
+  // prompt in the list, or once when the recording stops.
+  const runLabel = document.createElement("span");
+  runLabel.textContent = "runs";
+  const sched = document.createElement("select");
+  sched.dataset.field = "schedule";
+  const mins = new Set(SCHEDULE_INTERVALS);
+  if (a.mode === "interval" || a.mode === undefined) mins.add(a.interval_min ?? 5);
+  [...mins].sort((x, y) => x - y).forEach((m) => {
+    const o = document.createElement("option");
+    o.value = String(m);
+    o.textContent = m === 1 ? "every 1 min" : `every ${m} min`;
+    sched.appendChild(o);
+  });
+  const oChain = document.createElement("option");
+  oChain.value = "chain";
+  oChain.textContent = "after previous prompt";
+  const oStop = document.createElement("option");
+  oStop.value = "on_stop";
+  oStop.textContent = "when recording stops";
+  sched.appendChild(oChain);
+  sched.appendChild(oStop);
+  sched.value = a.mode === "chain" ? "chain"
+    : a.mode === "on_stop" ? "on_stop"
+    : String(a.interval_min ?? 5);
+  row.appendChild(runLabel);
+  row.appendChild(sched);
+
+  const minSpan = document.createElement("span");
+  minSpan.textContent = "min chars";
+  const minChars = document.createElement("input");
+  minChars.type = "number";
+  minChars.value = a.min_new_chars ?? 200;
+  minChars.dataset.field = "min_new_chars";
+  // min_new_chars only gates the fixed-cadence mode.
+  const syncMin = () => {
+    const isInterval = sched.value !== "chain" && sched.value !== "on_stop";
+    minSpan.style.display = isInterval ? "" : "none";
+    minChars.style.display = isInterval ? "" : "none";
   };
-  mk("every (s)", "interval_sec", a.interval_sec ?? 60);
-  mk("min chars", "min_new_chars", a.min_new_chars ?? 200);
+  sched.addEventListener("change", syncMin);
+  syncMin();
+  row.appendChild(minSpan);
+  row.appendChild(minChars);
 
   const enabled = document.createElement("input");
   enabled.type = "checkbox";
@@ -620,7 +667,7 @@ function adminItemRow(a) {
   const del = document.createElement("button");
   del.className = "del";
   del.textContent = "Delete";
-  del.onclick = () => item.remove();
+  del.onclick = () => { item.remove(); syncAddButton(); };
   row.appendChild(del);
 
   item.dataset.id = a.id || "";
@@ -628,6 +675,13 @@ function adminItemRow(a) {
   item.appendChild(prompt);
   item.appendChild(row);
   return item;
+}
+
+function syncAddButton() {
+  const n = els.adminList.querySelectorAll(".admin-item").length;
+  els.adminAdd.disabled = n >= MAX_ANALYZERS;
+  els.adminAdd.textContent = n >= MAX_ANALYZERS
+    ? `Max ${MAX_ANALYZERS} prompts` : "+ Add analyzer";
 }
 
 async function loadAdmin() {
@@ -645,6 +699,7 @@ async function loadAdmin() {
     els.adminAuth.hidden = !data.auth_required;
     els.adminList.textContent = "";
     data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    syncAddButton();
     els.adminStatus.textContent = data.llm
       ? `${data.analyzers.length} analyzer(s) loaded.`
       : "Warning: no LLM configured on the server — analyzers will not run.";
@@ -659,8 +714,10 @@ els.adminToken.addEventListener("input", () => { adminLoaded = false; });
 
 els.adminAdd.onclick = () => {
   els.adminList.appendChild(adminItemRow({
-    id: "", name: "", prompt: "", interval_sec: 60, min_new_chars: 200, enabled: true,
+    id: "", name: "", prompt: "", mode: "interval", interval_min: 5,
+    min_new_chars: 200, enabled: true,
   }));
+  syncAddButton();
 };
 
 els.adminSave.onclick = async () => {
@@ -668,11 +725,14 @@ els.adminSave.onclick = async () => {
   const analyzers = [...els.adminList.querySelectorAll(".admin-item")].map((item) => {
     const get = (f) => item.querySelector(`[data-field="${f}"]`);
     const name = get("name").value.trim();
+    const sched = get("schedule").value;
+    const isInterval = sched !== "chain" && sched !== "on_stop";
     return {
       id: item.dataset.id || slug(name) || undefined,
       name,
       prompt: get("prompt").value.trim(),
-      interval_sec: Number(get("interval_sec").value) || 60,
+      mode: isInterval ? "interval" : sched,
+      interval_min: isInterval ? Number(sched) : 5,
       min_new_chars: Number(get("min_new_chars").value) || 0,
       enabled: get("enabled").checked,
     };
@@ -693,6 +753,7 @@ els.adminSave.onclick = async () => {
     adminLoaded = false; // reload normalized values next open
     els.adminList.textContent = "";
     data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    syncAddButton();
     adminLoaded = true;
   } catch (e) {
     els.adminStatus.textContent = `Save failed: ${e.message}`;
