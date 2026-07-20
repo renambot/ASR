@@ -25,6 +25,7 @@ export ASR_LANGUAGE="en-US"
 export SAMPLE_RATE="16000"
 export AUTO_PUNCT="true"
 export AUDIO_QUEUE_MAX="100"
+export MAX_SESSIONS="20"             # max simultaneous browser sessions (0 = unlimited)
 
 # Speaker diarization (label who is speaking). Needs the sortformer model.
 export ASR_DIARIZATION="true"

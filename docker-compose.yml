@@ -27,6 +27,7 @@ services:
       SAMPLE_RATE: "16000"
       AUTO_PUNCT: "true"
       AUDIO_QUEUE_MAX: "100"
+      MAX_SESSIONS: "20"                 # max simultaneous browser sessions (0 = unlimited)
 
       # Speaker diarization (needs the sortformer model)
       ASR_DIARIZATION: "true"

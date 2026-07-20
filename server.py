@@ -93,6 +93,11 @@ DEBUG_AUDIO_MAX_BYTES = SAMPLE_RATE * 2 * 600  # ~10 min cap
 # itself). Set to 0 to disable.
 COMMIT_INTERVAL = float(os.getenv("COMMIT_INTERVAL_SEC", "2.0"))
 
+# Cap on simultaneous browser sessions. Each session holds a dedicated
+# realtime stream on the NIM, so this protects the GPU from being oversubscribed.
+# Set to 0 to disable the limit.
+MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "20"))
+
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="Live ASR Proxy")
@@ -417,16 +422,37 @@ class Bridge:
                 self._write_debug_wav()
 
 
+# Count of live browser sessions (single event loop, so a plain int is safe).
+_active_sessions = 0
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
-    """One browser connection == one Bridge to the NIM."""
+    """One browser connection == one Bridge to the NIM, capped at MAX_SESSIONS."""
+    global _active_sessions
     await ws.accept()
-    log.info("Browser connected")
+    if MAX_SESSIONS > 0 and _active_sessions >= MAX_SESSIONS:
+        log.warning("Rejecting browser: at capacity (%d/%d)", _active_sessions, MAX_SESSIONS)
+        await send_json(ws, {
+            "type": "status",
+            "state": "full",
+            "message": f"The server is at capacity ({MAX_SESSIONS} active sessions). "
+                       "Please try again later.",
+        })
+        try:
+            await ws.close(code=1013)  # 1013 = Try Again Later
+        except RuntimeError:
+            pass
+        return
+    _active_sessions += 1
+    log.info("Browser connected (%d/%s active)", _active_sessions,
+             MAX_SESSIONS if MAX_SESSIONS > 0 else "unlimited")
     bridge = Bridge(ws)
     try:
         await bridge.serve()
     finally:
-        log.info("Browser disconnected")
+        _active_sessions -= 1
+        log.info("Browser disconnected (%d active)", _active_sessions)
         try:
             await ws.close()
         except RuntimeError:

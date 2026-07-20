@@ -80,6 +80,10 @@
     }
     footer .spacer { margin-left: auto; }
     .placeholder { color: var(--muted); font-style: italic; }
+    #notice {
+      background: #3a1d1d; color: #ffb4b4; border-bottom: 1px solid var(--danger);
+      padding: 10px 20px; font-size: 14px; text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -92,6 +96,8 @@
       <div class="status"><span id="dot" class="dot"></span><span id="state">idle</span></div>
     </div>
   </header>
+
+  <div id="notice" hidden></div>
 
   <div class="content">
     <main>

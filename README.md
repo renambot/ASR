@@ -95,6 +95,7 @@ Then open **http://localhost:8080**.
 | `EOU_STOP_HISTORY` / `EOU_STOP_THRESHOLD` | `800` / `0.98` | endpointing: silence to finalize |
 | `EOU_START_HISTORY` / `EOU_START_THRESHOLD` | `300` / `0.2` | endpointing: speech-start detection |
 | `COMMIT_INTERVAL_SEC` | `2.0` | commit cadence when endpointing is off |
+| `MAX_SESSIONS` | `20` | max simultaneous browser sessions; extra visitors get a "server at capacity" notice (0 = unlimited) |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |
 

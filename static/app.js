@@ -26,7 +26,14 @@ const els = {
   clear: document.getElementById("clear"),
   speakerList: document.getElementById("speaker-list"),
   speakersEmpty: document.getElementById("speakers-empty"),
+  notice: document.getElementById("notice"),
 };
+
+// Show/hide the banner used for capacity and similar user-facing messages.
+function showNotice(text) {
+  els.notice.textContent = text;
+  els.notice.hidden = !text;
+}
 
 // --- Session state (reset/torn down by start()/stop()) ---
 let running = false;   // a capture session is active
@@ -260,6 +267,15 @@ function connectWS() {
       if (msg.state === "connected") setState("connected", "listening");
       else if (msg.state === "reconnecting") setState("reconnecting", "ASR reconnecting…");
       else if (msg.state === "connecting") setState("reconnecting", "connecting…");
+      else if (msg.state === "full") {
+        // Server is at capacity: don't retry in a loop, stop the session and
+        // tell the user why. stop() resets the status to "idle", so re-assert
+        // the error state after it completes.
+        wantReconnect = false;
+        showNotice(msg.message ||
+          "The server is at capacity right now. Please try again later.");
+        stop().catch(() => {}).finally(() => setState("error", "server full"));
+      }
     } else if (msg.type === "error") {
       setState("error", "ASR error");
       console.error("ASR error:", msg.message);
@@ -273,6 +289,7 @@ function connectWS() {
 // Begin a capture session: open the mic, build the audio graph, connect the WS.
 async function start() {
   debugChunks = []; // fresh capture each session
+  showNotice("");   // clear any previous capacity/error banner
   try {
     // Match the sample rate the proxy/NIM expect.
     const cfg = await fetch("/config").then((r) => r.json());
