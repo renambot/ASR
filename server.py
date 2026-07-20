@@ -780,22 +780,37 @@ async def admin_put_analyzers(request: Request):
 async def llm_process(payload: dict):
     """Run the transcript through the configured LLM and return the result.
 
-    Body: {"text": "<transcript>", "instruction": "<optional prompt override>"}
-    The endpoint, key, and default prompt are all server-side configuration,
-    mirroring how the NIM connection is handled.
+    Body: {"text": "<transcript>",
+           "analyzer": "<optional analyzer name or id>",
+           "instruction": "<optional prompt override>"}
+    If `analyzer` is given and matches a configured analyzer (by name or id),
+    that analyzer's prompt is used — so the AI Summary button can run the
+    "Meeting Summary" analysis on demand. Otherwise `instruction`, else the
+    server default. The endpoint, key, and prompts are all server-side.
     """
     if not LLM_BASE_URL:
         return JSONResponse({"error": "No LLM configured on the server."}, status_code=503)
     text = (payload.get("text") or "").strip()
     if not text:
         return JSONResponse({"error": "Empty transcript."}, status_code=400)
-    system = (payload.get("instruction") or "").strip() or LLM_SYSTEM_PROMPT
+    want = (payload.get("analyzer") or "").strip()
+    match = None
+    if want:
+        match = next((a for a in _analyzers
+                      if a["name"].strip().lower() == want.lower() or a["id"] == want), None)
+    if match is not None:
+        system = match["prompt"]
+    else:
+        system = (payload.get("instruction") or "").strip() or LLM_SYSTEM_PROMPT
     try:
         out = await llm_chat(system, text)
     except RuntimeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=502)
-    log.info("LLM processed %d chars -> %d chars (model=%s)",
-             len(text), len(out["result"]), out["model"] or "?")
+    if match is not None:
+        out["analyzer"] = match["name"]
+    log.info("LLM processed %d chars -> %d chars (model=%s, analyzer=%s)",
+             len(text), len(out["result"]), out["model"] or "?",
+             match["name"] if match else "-")
     return out
 
 

@@ -428,6 +428,36 @@ function exportText() {
   return `${header}\n\n${fullText()}`;
 }
 
+// AI Summary section (from the LLM panel), only if it's shown and has text.
+function aiSummarySection() {
+  if (els.llmPanel.hidden) return "";
+  const body = els.llmResult.textContent.trim();
+  if (!body) return "";
+  return `=== AI Summary ===\n\n${body}`;
+}
+
+// All analyzer cards currently in the Analysis panel, in display order.
+function analysisSection() {
+  const cards = els.analysisList.querySelectorAll(".analysis-card");
+  if (!cards.length) return "";
+  const parts = ["=== Analysis ==="];
+  cards.forEach((c) => {
+    const name = (c.querySelector(".a-name")?.textContent || "").trim();
+    const time = (c.querySelector(".a-time")?.textContent || "").trim();
+    const body = (c.querySelector(".a-body")?.textContent || "").trim();
+    parts.push(`\n## ${name}${time ? ` (${time})` : ""}\n\n${body}`);
+  });
+  return parts.join("\n");
+}
+
+// Full download payload: transcript export plus the AI summary and every
+// Analysis-panel section, when present.
+function downloadText() {
+  return [exportText(), aiSummarySection(), analysisSection()]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 els.copy.onclick = async () => {
   try { await navigator.clipboard.writeText(exportText()); els.copy.textContent = "Copied!"; }
   catch { els.copy.textContent = "Copy failed"; }
@@ -435,7 +465,7 @@ els.copy.onclick = async () => {
 };
 
 els.download.onclick = () => {
-  const blob = new Blob([exportText() + "\n"], { type: "text/plain" });
+  const blob = new Blob([downloadText() + "\n"], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -515,12 +545,15 @@ els.llm.onclick = async () => {
     const resp = await fetch("/llm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      // Run the "Meeting Summary" analyzer's prompt; the server falls back to
+      // its default summary prompt if no analyzer by that name is configured.
+      body: JSON.stringify({ text, analyzer: "Meeting Summary" }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
     els.llmResult.textContent = data.result;
-    els.llmTitle.textContent = data.model ? `LLM output — ${data.model}` : "LLM output";
+    const title = data.analyzer || "LLM output";
+    els.llmTitle.textContent = data.model ? `${title} — ${data.model}` : title;
     els.llmPanel.hidden = false;
     els.llmPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (e) {
