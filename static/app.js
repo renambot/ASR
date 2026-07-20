@@ -12,7 +12,7 @@
 // Base URL path the app is served under (set by the server for sub-path
 // deployments, e.g. "/asr"; empty when served at the root). All same-origin
 // URLs — the WebSocket, fetches, and the worklet module — are built with it.
-const BASE = window.__BASE__ || "";
+const BASE = "/speech";
 
 // Cached DOM element references.
 const els = {
@@ -256,7 +256,9 @@ function fmtElapsed(ms) {
 // Open (or reopen) the socket to the proxy and wire up event handlers.
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}${BASE}/ws`);
+  const wsurl = `${proto}://${location.host}${BASE}/ws`;
+console.log('WS : ', wsurl);
+  ws = new WebSocket(wsurl);
   ws.binaryType = "arraybuffer";
 
   ws.onopen = () => setState("connected", "listening");
@@ -322,7 +324,7 @@ async function start() {
   showNotice("");   // clear any previous capacity/error banner
   try {
     // Match the sample rate the proxy/NIM expect.
-    const cfg = await fetch(`${BASE}/config`).then((r) => r.json());
+    const cfg = await fetch(`config`).then((r) => r.json());
     sampleRate = cfg.sample_rate || 16000;
   } catch { /* use default */ }
 
@@ -345,7 +347,7 @@ async function start() {
     audioCtx = new AudioContext();
   }
   await audioCtx.resume();
-  await audioCtx.audioWorklet.addModule(`${BASE}/static/pcm-worklet.js`);
+  await audioCtx.audioWorklet.addModule(`static/pcm-worklet.js`);
 
   sourceNode = audioCtx.createMediaStreamSource(mediaStream);
   workletNode = new AudioWorkletNode(audioCtx, "pcm-worklet", {
@@ -556,7 +558,7 @@ els.llm.onclick = async () => {
   els.llm.disabled = true;
   els.llm.textContent = "Processing…";
   try {
-    const resp = await fetch(`${BASE}/llm`, {
+    const resp = await fetch(`llm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       // Run the "Meeting Summary" analyzer's prompt; the server falls back to
@@ -589,7 +591,7 @@ els.llmCopy.onclick = async () => {
 els.llmClose.onclick = () => { els.llmPanel.hidden = true; };
 
 // Show the AI Summary button only if the server has an LLM configured.
-fetch(`${BASE}/config`)
+fetch(`config`)
   .then((r) => r.json())
   .then((cfg) => { if (cfg.llm) els.llm.hidden = false; })
   .catch(() => {});
@@ -733,7 +735,7 @@ async function loadAdmin() {
   if (adminLoaded) return;
   els.adminStatus.textContent = "Loading…";
   try {
-    const resp = await fetch(`${BASE}/admin/analyzers`, { headers: adminHeaders() });
+    const resp = await fetch(`admin/analyzers`, { headers: adminHeaders() });
     if (resp.status === 401) {
       els.adminAuth.hidden = false;
       els.adminStatus.textContent = "Enter the admin token, then reopen this tab.";
@@ -784,7 +786,7 @@ els.adminSave.onclick = async () => {
   els.adminSave.disabled = true;
   els.adminStatus.textContent = "Saving…";
   try {
-    const resp = await fetch(`${BASE}/admin/analyzers`, {
+    const resp = await fetch(`admin/analyzers`, {
       method: "PUT",
       headers: adminHeaders(),
       body: JSON.stringify({ analyzers }),
