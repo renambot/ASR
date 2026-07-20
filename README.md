@@ -51,6 +51,20 @@ source .venv/bin/activate          # tcsh: source .venv/bin/activate.csh
 pip install -r requirements.txt
 ```
 
+### Or run with Docker
+
+All the settings from `GO` are environment variables, so the proxy runs
+unchanged in a container. Edit the `environment:` block in
+`docker-compose.yml` (NIM host/port/path, model, diarization, …) and:
+
+```sh
+docker compose up -d --build
+```
+
+Then open <http://localhost:8080>. For TLS (mic access off localhost),
+either mount a cert/key and set `SSL_CERT`/`SSL_KEY` (see the commented
+lines in `docker-compose.yml`), or terminate TLS with nginx in front.
+
 ## Configure and run
 
 All settings live at the top of the **`GO`** launcher script — edit them and run

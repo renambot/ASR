@@ -1,0 +1,53 @@
+# Live ASR proxy in Docker.
+#   docker compose up -d --build
+# then open http://localhost:8080
+#
+# Every setting from the GO script is exposed here as an environment
+# variable — edit values below (or override with `NIM_HOST=... docker
+# compose up`) and restart. server.py reads them at startup.
+services:
+  asr-web:
+    build: .
+    image: live-asr
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # ---- NIM (upstream ASR) --------------------------------------------
+      NIM_SCHEME: "wss"                    # ws or wss
+      NIM_HOST: "arcade.evl.uic.edu"       # <-- your NIM (or nginx front door)
+      NIM_PORT: "443"                      # 443 via nginx, or 9000/7777 direct
+      NIM_PATH: "/asr/v1/realtime"         # /v1/realtime if hitting the NIM directly
+      NIM_INTENT: "transcription"
+      NIM_API_KEY: ""                      # optional bearer token
+
+      # ---- ASR options ----------------------------------------------------
+      ASR_MODEL: "cache-aware-parakeet-rnnt-en-US-asr-streaming-sortformer"
+      ASR_LANGUAGE: "en-US"
+      SAMPLE_RATE: "16000"
+      AUTO_PUNCT: "true"
+      AUDIO_QUEUE_MAX: "100"
+
+      # Speaker diarization (needs the sortformer model)
+      ASR_DIARIZATION: "true"
+      ASR_MAX_SPEAKERS: "8"
+
+      # ---- Segmentation ---------------------------------------------------
+      ASR_ENDPOINTING: "false"             # false = timed commits (reliable)
+      EOU_STOP_HISTORY: "800"
+      EOU_STOP_THRESHOLD: "0.98"
+      EOU_START_HISTORY: "300"
+      EOU_START_THRESHOLD: "0.2"
+      COMMIT_INTERVAL_SEC: "0.75"
+
+      # ---- Debug ----------------------------------------------------------
+      DEBUG: "false"
+      # DEBUG_AUDIO_DIR: "/tmp/asr-debug"
+
+      # ---- TLS (optional; mic access off localhost requires https) --------
+      # Mount the cert/key below and point these at the in-container paths.
+      # SSL_CERT: "/certs/fullchain.pem"
+      # SSL_KEY: "/certs/privkey.pem"
+
+    # volumes:
+    #   - /etc/letsencrypt/live/example.com:/certs:ro
