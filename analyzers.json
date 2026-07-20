@@ -16,6 +16,14 @@
     "enabled": true
   },
   {
+    "id": "speakers",
+    "name": "Speakers",
+    "prompt": "You are given a meeting transcript where each line is prefixed with a [MM:SS] timestamp and a speaker label. Describe the speakers, then analyze who is speaking the most and on what topics. For each main topic, give its time range as [start-stop]. Base everything only on the transcript; do not invent times. Plain text only.",
+    "mode": "interval",
+    "interval_min": 5,
+    "enabled": true
+  },
+  {
     "id": "final-summary",
     "name": "Meeting Summary",
     "prompt": "The meeting has just ended. You are given its full transcript, possibly with speaker labels. Write a concise summary, then list decisions and action items with owners when identifiable. Plain text only.",
