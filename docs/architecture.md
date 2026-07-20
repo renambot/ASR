@@ -4,6 +4,8 @@ A developer's guide to the Live ASR web app: how it's built, how the code is
 organized, what the UI does, and how to deploy and configure it. For a quick
 user-facing overview see the top-level [`README.md`](../README.md).
 
+![Live ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](screenshot.jpg)
+
 ---
 
 ## 1. What it is

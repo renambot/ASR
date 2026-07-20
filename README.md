@@ -2,8 +2,12 @@
 
 A minimal web app for **indefinite live speech-to-text**. Pick a microphone in
 the browser, stream audio to your NVIDIA ASR NIM, and watch an append-only
-transcript grow — talk for hours, then copy or download the text. Optional
-speaker diarization labels who is talking.
+transcript grow — talk for hours, then copy it or export the meeting as
+Markdown. Optional speaker diarization labels who is talking (with renamable
+speakers), background LLM analyzers surface topics/summaries live, and an AI
+summary runs on demand.
+
+![Live ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](docs/screenshot.jpg)
 
 ## How it works
 
@@ -55,7 +59,9 @@ pip install -r requirements.txt
 
 All the settings from `GO` are environment variables, so the proxy runs
 unchanged in a container. Edit the `environment:` block in
-`docker-compose.yml` (NIM host/port/path, model, diarization, …) and:
+`docker-compose.yml` (NIM host/port/path, model, diarization, …). For secrets
+(API keys, endpoints), copy `.env.example` to **`.env`** (git-ignored) — docker
+compose auto-loads it and substitutes the values in. Then:
 
 ```sh
 docker compose up -d --build
@@ -76,6 +82,11 @@ All settings live at the top of the **`GO`** launcher script — edit them and r
 
 Then open **http://localhost:8080**.
 
+**Keep secrets out of git:** `GO` is committed, so don't put real keys in it.
+Copy `GO.local.example` to **`GO.local`** (git-ignored) and put your
+`LLM_API_KEY`, endpoints, etc. there — `GO` sources it and its values override
+the defaults.
+
 ### Settings (in `GO`)
 
 | Variable | Default | Notes |
@@ -84,6 +95,7 @@ Then open **http://localhost:8080**.
 | `NIM_HOST` | `arcade.evl.uic.edu` | host of your ASR NIM (or nginx front door) |
 | `NIM_PORT` | `443` | `443` via nginx, or `9000`/`7777` direct to the NIM |
 | `NIM_PATH` | `/asr/v1/realtime` | `/v1/realtime` if hitting the NIM directly |
+| `NIM_INTENT` | `transcription` | realtime intent sent to the NIM |
 | `NIM_API_KEY` | *(empty)* | sent as `Authorization: Bearer …` if set |
 | `ASR_MODEL` | `cache-aware-parakeet-rnnt-en-US-asr-streaming-sortformer` | must match the loaded model |
 | `ASR_LANGUAGE` | `en-US` | language code |
@@ -94,11 +106,12 @@ Then open **http://localhost:8080**.
 | `ASR_ENDPOINTING` | `false` | `true` = VAD segmentation; `false` = timed commits |
 | `EOU_STOP_HISTORY` / `EOU_STOP_THRESHOLD` | `800` / `0.98` | endpointing: silence to finalize |
 | `EOU_START_HISTORY` / `EOU_START_THRESHOLD` | `300` / `0.2` | endpointing: speech-start detection |
-| `COMMIT_INTERVAL_SEC` | `2.0` | commit cadence when endpointing is off |
+| `COMMIT_INTERVAL_SEC` | `0.75` | commit cadence when endpointing is off; lower = snappier |
 | `MAX_SESSIONS` | `20` | max simultaneous browser sessions; extra visitors get a "server at capacity" notice (0 = unlimited) |
-| `LLM_BASE_URL` | *(empty)* | OpenAI-compatible endpoint (e.g. vLLM) for the **AI Summary** button; empty = feature off |
+| `AUDIO_QUEUE_MAX` | `100` | bounded, drop-oldest audio queue depth (caps latency during a reconnect) |
+| `LLM_BASE_URL` | *(empty)* | OpenAI-compatible endpoint (e.g. vLLM) powering the **AI Summary** button and the background **analyzers**; empty = both features off |
 | `LLM_MODEL` / `LLM_API_KEY` | *(empty)* | model name and optional bearer token for that endpoint |
-| `LLM_SYSTEM_PROMPT` | *(built-in)* | what the LLM does with the transcript (default: summary + action items) |
+| `LLM_SYSTEM_PROMPT` | *(built-in)* | fallback prompt for AI Summary when no "Meeting Summary" analyzer exists (default: summary + action items) |
 | `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SEC` | `0.2` / `1024` / `120` | generation settings |
 | `ANALYZERS_CONFIG` | `./analyzers.json` | JSON file with the default background analyzer prompts (max 5). Each runs on a schedule chosen in the Admin tab: every N minutes, chained after the previous prompt (receiving its output as context), or once when the recording stops |
 | `ANALYZER_MIN_CHARS` | `40` | the periodic analyzers wait until the transcript has at least this many characters before running (avoids firing on an empty meeting) |
@@ -112,13 +125,30 @@ set `SSL_CERT` and `SSL_KEY` in `GO` and it passes them to uvicorn.
 
 ## Using it
 
-1. Open the page, allow microphone access.
-2. Choose a mic, press **Start**, and speak.
+1. Open the page, allow microphone access. Optionally type a **Meeting title**
+   (it's added to the top of exports).
+2. Choose a mic, press **Start**, and speak. **Pause/Resume** stops sending
+   audio without ending the session; the transcript continues on resume.
 3. Grey italic text is the live hypothesis; it becomes solid when the segment is
    finalized and appended. With diarization on, a new line labeled `Speaker N:`
    starts whenever the speaker changes.
-4. **Copy** / **Download .txt** any time. The session runs until you press **Stop**.
+4. **Copy** or **Download .md** any time. The Markdown export is ordered:
+   title + date → AI summary → analyses → full transcript. The session runs
+   until you press **Stop**.
 5. **Save WAV** downloads exactly what was captured (debugging).
+
+### Side panel and analyzers (when an LLM is configured)
+
+- **Speakers tab** — rename each `Speaker N`; names replace the label
+  everywhere, including exports and the analyzers.
+- **Analysis panel** (bottom of the transcript) — shows results from the
+  background **analyzers** that run on a schedule during the meeting.
+- **Admin tab** — edit the analyzer prompts and schedules (fold/reorder rows;
+  order matters for chaining). **Run** one or **Run all now** on demand (works
+  during, paused, or after recording), **Save** to persist (also cached in this
+  browser), or **Reset to server defaults**.
+- **AI Summary** button (footer) — runs the "Meeting Summary" analyzer over the
+  transcript on demand. The footer's **AI** dot turns purple while any AI runs.
 
 ## Deploying behind nginx
 
@@ -159,10 +189,18 @@ The server then serves the page, static assets, `/ws`, `/config`, `/llm` and
 
 ```
 GO                      # launcher: all settings, then `./GO`
-server.py               # proxy: reconnect, commit/endpointing, diarization, flush, debug
-static/index.html       # UI
-static/app.js           # capture, stream, render, copy/download/WAV
+GO.local.example        # copy to GO.local (git-ignored) for secrets/overrides
+server.py               # proxy: reconnect, commit/endpointing, diarization,
+                        #   analyzers, LLM (/llm, /analyze), admin, static hosting
+static/index.html       # UI (markup + all CSS)
+static/app.js           # capture, stream, render, exports, analyzers, panels
 static/pcm-worklet.js   # 16 kHz Int16 PCM resampler (audio thread)
+analyzers.json          # default background-analyzer prompts and schedules
+Dockerfile              # container image
+docker-compose.yml      # containerized deployment (reads .env)
+docker-entrypoint.sh    # container entrypoint (PORT/TLS)
+.env.example            # copy to .env (git-ignored) for Docker secrets
 deploy/nginx-asr.conf   # WebSocket reverse-proxy for the /asr route
+docs/architecture.md    # architecture / code / UI / deployment guide (also the wiki)
 requirements.txt
 ```
