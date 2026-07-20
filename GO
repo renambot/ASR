@@ -31,6 +31,17 @@ export MAX_SESSIONS="20"             # max simultaneous browser sessions (0 = un
 export ASR_DIARIZATION="true"
 export ASR_MAX_SPEAKERS="8"
 
+# ---- LLM post-processing (optional) ----------------------------------------
+# OpenAI-compatible chat completions endpoint (vLLM, Open WebUI, OpenAI, ...).
+# Leave LLM_BASE_URL empty to disable; the AI Summary button hides itself.
+export LLM_BASE_URL=""                    # e.g. http://sage200.evl.uic.edu:8000/v1
+export LLM_MODEL=""                       # model name at that endpoint
+export LLM_API_KEY=""                     # optional bearer token
+export LLM_SYSTEM_PROMPT=""               # "" = built-in meeting-summary prompt
+export LLM_TEMPERATURE="0.2"
+export LLM_MAX_TOKENS="1024"
+export LLM_TIMEOUT_SEC="120"
+
 # ---- Segmentation --------------------------------------------------------
 # Endpointing ON = the NIM finalizes on natural speech pauses (recommended).
 # Endpointing OFF = fall back to committing the buffer every COMMIT_INTERVAL_SEC.

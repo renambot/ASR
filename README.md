@@ -96,6 +96,10 @@ Then open **http://localhost:8080**.
 | `EOU_START_HISTORY` / `EOU_START_THRESHOLD` | `300` / `0.2` | endpointing: speech-start detection |
 | `COMMIT_INTERVAL_SEC` | `2.0` | commit cadence when endpointing is off |
 | `MAX_SESSIONS` | `20` | max simultaneous browser sessions; extra visitors get a "server at capacity" notice (0 = unlimited) |
+| `LLM_BASE_URL` | *(empty)* | OpenAI-compatible endpoint (e.g. vLLM) for the **AI Summary** button; empty = feature off |
+| `LLM_MODEL` / `LLM_API_KEY` | *(empty)* | model name and optional bearer token for that endpoint |
+| `LLM_SYSTEM_PROMPT` | *(built-in)* | what the LLM does with the transcript (default: summary + action items) |
+| `LLM_TEMPERATURE` / `LLM_MAX_TOKENS` / `LLM_TIMEOUT_SEC` | `0.2` / `1024` / `120` | generation settings |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |
 

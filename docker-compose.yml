@@ -41,6 +41,16 @@ services:
       EOU_START_THRESHOLD: "0.2"
       COMMIT_INTERVAL_SEC: "0.75"
 
+      # ---- LLM post-processing (optional) ---------------------------------
+      # OpenAI-compatible endpoint; empty LLM_BASE_URL disables the feature.
+      LLM_BASE_URL: ""                     # e.g. http://sage200.evl.uic.edu:8000/v1
+      LLM_MODEL: ""
+      LLM_API_KEY: ""
+      LLM_SYSTEM_PROMPT: ""                # "" = built-in meeting-summary prompt
+      LLM_TEMPERATURE: "0.2"
+      LLM_MAX_TOKENS: "1024"
+      LLM_TIMEOUT_SEC: "120"
+
       # ---- Debug ----------------------------------------------------------
       DEBUG: "false"
       # DEBUG_AUDIO_DIR: "/tmp/asr-debug"

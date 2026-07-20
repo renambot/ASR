@@ -27,6 +27,12 @@ const els = {
   speakerList: document.getElementById("speaker-list"),
   speakersEmpty: document.getElementById("speakers-empty"),
   notice: document.getElementById("notice"),
+  llm: document.getElementById("llm"),
+  llmPanel: document.getElementById("llm-panel"),
+  llmResult: document.getElementById("llm-result"),
+  llmTitle: document.getElementById("llm-title"),
+  llmCopy: document.getElementById("llm-copy"),
+  llmClose: document.getElementById("llm-close"),
 };
 
 // Show/hide the banner used for capacity and similar user-facing messages.
@@ -453,6 +459,56 @@ els.savewav.onclick = () => {
   els.savewav.textContent = `saved ${secs}s`;
   setTimeout(() => (els.savewav.textContent = "Save WAV"), 2000);
 };
+
+// ---- LLM post-processing ---------------------------------------------------
+// The server exposes POST /llm when an LLM endpoint is configured (see
+// LLM_BASE_URL in GO / docker-compose.yml). The prompt, model, and API key
+// all live server-side; the client just sends the current transcript (with
+// any custom speaker names applied) and renders the result.
+els.llm.onclick = async () => {
+  const text = fullText();
+  if (!text) {
+    els.llm.textContent = "no transcript";
+    setTimeout(() => (els.llm.textContent = "AI Summary"), 1500);
+    return;
+  }
+  els.llm.disabled = true;
+  els.llm.textContent = "Processing…";
+  try {
+    const resp = await fetch("/llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    els.llmResult.textContent = data.result;
+    els.llmTitle.textContent = data.model ? `LLM output — ${data.model}` : "LLM output";
+    els.llmPanel.hidden = false;
+    els.llmPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (e) {
+    els.llmResult.textContent = `Error: ${e.message}`;
+    els.llmTitle.textContent = "LLM output";
+    els.llmPanel.hidden = false;
+  } finally {
+    els.llm.disabled = false;
+    els.llm.textContent = "AI Summary";
+  }
+};
+
+els.llmCopy.onclick = async () => {
+  try { await navigator.clipboard.writeText(els.llmResult.textContent); els.llmCopy.textContent = "Copied!"; }
+  catch { els.llmCopy.textContent = "Copy failed"; }
+  setTimeout(() => (els.llmCopy.textContent = "Copy"), 1500);
+};
+
+els.llmClose.onclick = () => { els.llmPanel.hidden = true; };
+
+// Show the AI Summary button only if the server has an LLM configured.
+fetch("/config")
+  .then((r) => r.json())
+  .then((cfg) => { if (cfg.llm) els.llm.hidden = false; })
+  .catch(() => {});
 
 els.clear.onclick = () => {
   if (!fullText() || confirm("Clear the transcript?")) {

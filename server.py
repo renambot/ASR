@@ -31,9 +31,10 @@ import wave
 from pathlib import Path
 from urllib.parse import urlencode
 
+import httpx
 import websockets
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 # DEBUG=true surfaces the per-frame / per-event tracing used during bring-up.
@@ -97,6 +98,23 @@ COMMIT_INTERVAL = float(os.getenv("COMMIT_INTERVAL_SEC", "2.0"))
 # realtime stream on the NIM, so this protects the GPU from being oversubscribed.
 # Set to 0 to disable the limit.
 MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "20"))
+
+# ---------------------------------------------------------------------------
+# Optional LLM post-processing (OpenAI-compatible chat completions endpoint,
+# e.g. vLLM / Open WebUI / OpenAI). Leave LLM_BASE_URL empty to disable; the
+# UI hides the button when disabled. The API key and prompt stay server-side.
+# ---------------------------------------------------------------------------
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "").rstrip("/")  # e.g. http://host:8000/v1
+LLM_MODEL = os.getenv("LLM_MODEL", "")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_SYSTEM_PROMPT = os.getenv("LLM_SYSTEM_PROMPT", "") or (
+    "You are given the transcript of a meeting, possibly with speaker labels. "
+    "Produce a concise summary followed by a list of decisions and action "
+    "items (with owners when identifiable). Use plain text."
+)
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
+LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "120"))
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -462,7 +480,62 @@ async def ws_endpoint(ws: WebSocket):
 @app.get("/config")
 async def config():
     """Expose non-secret settings the client needs (e.g. sample rate)."""
-    return {"sample_rate": SAMPLE_RATE, "language": ASR_LANGUAGE, "model": ASR_MODEL or "default"}
+    return {
+        "sample_rate": SAMPLE_RATE,
+        "language": ASR_LANGUAGE,
+        "model": ASR_MODEL or "default",
+        "llm": bool(LLM_BASE_URL),
+    }
+
+
+@app.post("/llm")
+async def llm_process(payload: dict):
+    """Run the transcript through the configured LLM and return the result.
+
+    Body: {"text": "<transcript>", "instruction": "<optional prompt override>"}
+    The endpoint, key, and default prompt are all server-side configuration,
+    mirroring how the NIM connection is handled.
+    """
+    if not LLM_BASE_URL:
+        return JSONResponse({"error": "No LLM configured on the server."}, status_code=503)
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return JSONResponse({"error": "Empty transcript."}, status_code=400)
+    system = (payload.get("instruction") or "").strip() or LLM_SYSTEM_PROMPT
+
+    body = {
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": text},
+        ],
+        "temperature": LLM_TEMPERATURE,
+        "max_tokens": LLM_MAX_TOKENS,
+    }
+    if LLM_MODEL:
+        body["model"] = LLM_MODEL
+    headers = {"Content-Type": "application/json"}
+    if LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
+
+    try:
+        async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SEC) as client:
+            resp = await client.post(
+                f"{LLM_BASE_URL}/chat/completions", json=body, headers=headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        result = data["choices"][0]["message"]["content"]
+        usage = data.get("usage") or {}
+        log.info("LLM processed %d chars -> %d chars (model=%s)",
+                 len(text), len(result), data.get("model", LLM_MODEL or "?"))
+        return {"result": result, "model": data.get("model", LLM_MODEL), "usage": usage}
+    except httpx.HTTPStatusError as exc:
+        log.warning("LLM HTTP error: %s %s", exc.response.status_code, exc.response.text[:500])
+        return JSONResponse(
+            {"error": f"LLM returned {exc.response.status_code}."}, status_code=502)
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+        log.warning("LLM request failed: %r", exc)
+        return JSONResponse({"error": "LLM request failed."}, status_code=502)
 
 
 @app.get("/")

@@ -84,6 +84,20 @@
       background: #3a1d1d; color: #ffb4b4; border-bottom: 1px solid var(--danger);
       padding: 10px 20px; font-size: 14px; text-align: center;
     }
+    #llm-panel {
+      max-width: 900px; margin: 24px auto 0; border: 1px solid var(--border);
+      border-radius: 10px; background: var(--panel); overflow: hidden;
+    }
+    #llm-panel .llm-head {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted);
+    }
+    #llm-panel .llm-head .spacer { margin-left: auto; }
+    #llm-panel .llm-head button { padding: 4px 10px; font-size: 12px; }
+    #llm-result {
+      padding: 14px; font-size: 15px; line-height: 1.6; white-space: pre-wrap;
+      word-wrap: break-word;
+    }
   </style>
 </head>
 <body>
@@ -102,6 +116,15 @@
   <div class="content">
     <main>
       <div id="transcript"><span class="placeholder">Select a microphone and press Start. Speak as long as you like — the transcript grows below.</span><span id="interim"></span></div>
+      <div id="llm-panel" hidden>
+        <div class="llm-head">
+          <span id="llm-title">LLM output</span>
+          <span class="spacer"></span>
+          <button id="llm-copy">Copy</button>
+          <button id="llm-close">✕</button>
+        </div>
+        <div id="llm-result"></div>
+      </div>
     </main>
 
     <aside id="speakers">
@@ -117,6 +140,7 @@
     <span class="spacer"></span>
     <button id="copy">Copy</button>
     <button id="download">Download .txt</button>
+    <button id="llm" hidden title="Send the transcript to the configured LLM">AI Summary</button>
     <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>
     <button id="clear">Clear</button>
   </footer>
