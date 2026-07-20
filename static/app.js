@@ -444,32 +444,46 @@ function exportText() {
   return `${header}\n\n${fullText()}`;
 }
 
-// AI Summary section (from the LLM panel), only if it's shown and has text.
-function aiSummarySection() {
-  if (els.llmPanel.hidden) return "";
-  const body = els.llmResult.textContent.trim();
-  if (!body) return "";
-  return `=== AI Summary ===\n\n${body}`;
+// ---- Markdown export (Download) -------------------------------------------
+// A Markdown document, in order: title + date, then the AI summary, then all
+// analyses, then the full transcript. Sections with no content are omitted.
+function mdHeader() {
+  const title = els.meetingTitle.value.trim();
+  const date = new Date().toLocaleDateString(undefined, {
+    year: "numeric", month: "long", day: "numeric",
+  });
+  return `# ${title || "Meeting transcript"}\n\n**Date:** ${date}`;
 }
 
-// All analyzer cards currently in the Analysis panel, in display order.
-function analysisSection() {
+function mdSummary() {
+  if (els.llmPanel.hidden) return "";
+  const body = els.llmResult.textContent.trim();
+  return body ? `## Summary\n\n${body}` : "";
+}
+
+function mdAnalysis() {
   const cards = els.analysisList.querySelectorAll(".analysis-card");
   if (!cards.length) return "";
-  const parts = ["=== Analysis ==="];
+  const parts = ["## Analysis"];
   cards.forEach((c) => {
     const name = (c.querySelector(".a-name")?.textContent || "").trim();
     const time = (c.querySelector(".a-time")?.textContent || "").trim();
     const body = (c.querySelector(".a-body")?.textContent || "").trim();
-    parts.push(`\n## ${name}${time ? ` (${time})` : ""}\n\n${body}`);
+    parts.push(`### ${name}${time ? ` — ${time}` : ""}\n\n${body}`);
   });
-  return parts.join("\n");
+  return parts.join("\n\n");
 }
 
-// Full download payload: transcript export plus the AI summary and every
-// Analysis-panel section, when present.
-function downloadText() {
-  return [exportText(), aiSummarySection(), analysisSection()]
+function mdTranscript() {
+  const body = fullText().trim();
+  if (!body) return "";
+  // Two trailing spaces = a Markdown hard line break, so speaker turns keep
+  // their own lines when the document is rendered.
+  return `## Transcript\n\n${body.replace(/\n/g, "  \n")}`;
+}
+
+function exportMarkdown() {
+  return [mdHeader(), mdSummary(), mdAnalysis(), mdTranscript()]
     .filter(Boolean)
     .join("\n\n");
 }
@@ -481,13 +495,13 @@ els.copy.onclick = async () => {
 };
 
 els.download.onclick = () => {
-  const blob = new Blob([downloadText() + "\n"], { type: "text/plain" });
+  const blob = new Blob([exportMarkdown() + "\n"], { type: "text/markdown" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const slug = els.meetingTitle.value.trim()
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  a.download = `${slug ? slug + "-" : "transcript-"}${ts}.txt`;
+  a.download = `${slug ? slug + "-" : "transcript-"}${ts}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
 };
