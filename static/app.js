@@ -129,6 +129,14 @@ function setState(cls, label) {
   els.state.textContent = label;
 }
 
+// Push the custom speaker-name map to the server so its background analyzers
+// use the names ("Alice: …") instead of raw "Speaker 0: …" labels.
+function sendSpeakerNames() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try { ws.send(JSON.stringify({ type: "speaker_names", names: speakerNames })); } catch {}
+  }
+}
+
 function speakerLabel(s) {
   if (s === null || s === undefined) return null;
   const key = String(s);
@@ -235,6 +243,7 @@ function addSpeakerRow(key) {
   input.addEventListener("input", () => {
     speakerNames[key] = input.value;
     renderTranscript();
+    sendSpeakerNames(); // keep the server's analyzer transcript in sync
   });
 
   row.appendChild(swatch);
@@ -262,7 +271,7 @@ console.log('WS : ', wsurl);
   ws = new WebSocket(wsurl);
   ws.binaryType = "arraybuffer";
 
-  ws.onopen = () => setState("connected", "listening");
+  ws.onopen = () => { setState("connected", "listening"); sendSpeakerNames(); };
   ws.onclose = () => {
     // Don't leave stop() hanging if the socket dies during finalization.
     if (sessionEndResolve) { sessionEndResolve(); sessionEndResolve = null; }

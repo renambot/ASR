@@ -324,6 +324,9 @@ class Bridge:
         # Server-side copy of finalized segments, used by the background
         # analyzers ("Speaker N: text" lines when diarization is on).
         self.transcript_lines: list[str] = []
+        # speaker id (str) -> custom name from the browser's Speakers panel, so
+        # analyzers see "Alice: …" instead of "Speaker 0: …".
+        self.speaker_names: dict[str, str] = {}
         self._finalizing = False  # a stop/finalize is already in progress
 
     # -- browser -> queue ---------------------------------------------------
@@ -388,6 +391,12 @@ class Bridge:
             if not self._finalizing:
                 self._finalizing = True
                 asyncio.create_task(self._finalize())
+        elif etype == "speaker_names":
+            # Custom speaker names from the Speakers panel; applied to the
+            # transcript the analyzers see.
+            names = evt.get("names")
+            if isinstance(names, dict):
+                self.speaker_names = {str(k): str(v) for k, v in names.items()}
 
     # -- NIM connection manager --------------------------------------------
     async def run_nim(self) -> None:
@@ -559,7 +568,7 @@ class Bridge:
                 pass
             if not LLM_BASE_URL or not _analyzers:
                 continue
-            text = "\n".join(self.transcript_lines)
+            text = self._labeled_transcript()
             # Wait until there's some actual transcript before analyzing.
             if len(text.strip()) < ANALYZER_MIN_CHARS:
                 continue
@@ -594,7 +603,7 @@ class Bridge:
         output as context."""
         # Give the flushed last segment a moment to come back from the NIM.
         await asyncio.sleep(1.0)
-        text = "\n".join(self.transcript_lines)
+        text = self._labeled_transcript()
         if not text.strip() or not LLM_BASE_URL:
             return
         prev_ran, prev_name, prev_result = False, None, None
@@ -610,6 +619,23 @@ class Bridge:
                 prev_ran, prev_name, prev_result = result is not None, a["name"], result
             else:
                 prev_ran = False
+
+    def _labeled_transcript(self) -> str:
+        """The transcript with custom speaker names applied (for analyzers).
+        Lines are "Speaker <id>: text"; swap the prefix for the browser-supplied
+        name when one exists."""
+        names = {k: v.strip() for k, v in self.speaker_names.items() if v.strip()}
+        if not names:
+            return "\n".join(self.transcript_lines)
+        out = []
+        for line in self.transcript_lines:
+            for sid, nm in names.items():
+                prefix = f"Speaker {sid}: "
+                if line.startswith(prefix):
+                    line = f"{nm}: {line[len(prefix):]}"
+                    break
+            out.append(line)
+        return "\n".join(out)
 
     async def _run_analyzer(self, analyzer: dict, text: str,
                             prev_name: str | None = None,
