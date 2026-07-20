@@ -369,7 +369,7 @@ async function start() {
   els.toggle.textContent = "Stop";
   els.toggle.classList.remove("primary");
   els.pause.textContent = "Pause";
-  els.pause.hidden = false;
+  els.pause.disabled = false;
   els.mic.disabled = true;
   startTime = Date.now() - 0;
   if (!elapsedTimer) {
@@ -386,7 +386,8 @@ async function stop() {
   wantReconnect = false;
   els.toggle.textContent = "Start";
   els.toggle.classList.add("primary");
-  els.pause.hidden = true;
+  els.pause.textContent = "Pause";
+  els.pause.disabled = true;
   els.mic.disabled = false;
 
   // Stop capturing first so no new audio is queued.
