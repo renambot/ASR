@@ -480,9 +480,8 @@ function mdAnalysis() {
   const parts = ["## Analysis"];
   cards.forEach((c) => {
     const name = (c.querySelector(".a-name")?.textContent || "").trim();
-    const time = (c.querySelector(".a-time")?.textContent || "").trim();
     const body = (c.querySelector(".a-body")?.textContent || "").trim();
-    parts.push(`### ${name}${time ? ` — ${time}` : ""}\n\n${body}`);
+    parts.push(`### ${name}\n\n${body}`);
   });
   return parts.join("\n\n");
 }
