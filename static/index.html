@@ -150,7 +150,9 @@
     .admin-item .row .del { margin-left: auto; color: var(--danger); border-color: var(--danger); padding: 5px 9px; font-size: 14px; }
     .admin-actions { display: flex; gap: 8px; }
     .admin-actions button { flex: 1; font-size: 14px; }
-    #admin-status { font-size: 13px; color: var(--muted); min-height: 16px; }
+    #admin-reset { width: 100%; font-size: 13px; margin-top: 8px; color: var(--muted); }
+    #admin-reset:hover { color: var(--text); }
+    #admin-status { font-size: 13px; color: var(--muted); min-height: 16px; margin-top: 8px; }
     @media (max-width: 760px) {
       .content { flex-direction: column; }
       aside#speakers {
@@ -251,6 +253,7 @@
           <button id="admin-add">+ Add analyzer</button>
           <button id="admin-save" class="primary">Save</button>
         </div>
+        <button id="admin-reset" title="Discard this browser's saved set and reload the server's default analyzers">Reset to server defaults</button>
         <div id="admin-status"></div>
       </section>
     </aside>

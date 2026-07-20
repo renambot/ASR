@@ -46,6 +46,7 @@ const els = {
   adminList: document.getElementById("admin-list"),
   adminAdd: document.getElementById("admin-add"),
   adminSave: document.getElementById("admin-save"),
+  adminReset: document.getElementById("admin-reset"),
   adminStatus: document.getElementById("admin-status"),
   adminAuth: document.getElementById("admin-auth"),
   adminToken: document.getElementById("admin-token"),
@@ -955,6 +956,30 @@ els.adminSave.onclick = async () => {
     els.adminStatus.textContent = `Save failed: ${e.message}`;
   } finally {
     els.adminSave.disabled = false;
+  }
+};
+
+// Discard this browser's saved analyzers and reload the server's defaults
+// (re-read from the server's config file). Clears localStorage so the browser
+// no longer overrides the defaults.
+els.adminReset.onclick = async () => {
+  if (!confirm("Reset to the server's default analyzers? This discards this browser's saved set.")) return;
+  els.adminReset.disabled = true;
+  els.adminStatus.textContent = "Resetting…";
+  try {
+    const resp = await fetch(`admin/analyzers/reset`, { method: "POST", headers: adminHeaders() });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    try { localStorage.removeItem(ANALYZERS_LS_KEY); } catch {}
+    els.adminList.textContent = "";
+    data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    syncAddButton();
+    adminLoaded = true;
+    els.adminStatus.textContent = `Reset to ${data.analyzers.length} server default(s).`;
+  } catch (e) {
+    els.adminStatus.textContent = `Reset failed: ${e.message}`;
+  } finally {
+    els.adminReset.disabled = false;
   }
 };
 

@@ -824,6 +824,19 @@ async def admin_put_analyzers(request: Request):
     return {"ok": True, "saved": saved, "analyzers": _analyzers}
 
 
+@app.post("/admin/analyzers/reset")
+async def admin_reset_analyzers(request: Request):
+    """Reload the analyzer registry from the on-disk config file (the server
+    defaults), discarding the current in-memory set."""
+    err = _admin_auth_error(request)
+    if err:
+        return err
+    load_analyzers()
+    log.info("Admin reset analyzers to server defaults: %d item(s)", len(_analyzers))
+    return {"ok": True, "analyzers": _analyzers, "llm": bool(LLM_BASE_URL),
+            "auth_required": bool(ADMIN_TOKEN)}
+
+
 @app.post("/llm")
 async def llm_process(payload: dict):
     """Run the transcript through the configured LLM and return the result.
