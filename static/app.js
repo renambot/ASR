@@ -26,6 +26,7 @@ const els = {
   interim: document.getElementById("interim"),
   elapsed: document.getElementById("elapsed"),
   words: document.getElementById("words"),
+  aiActivity: document.getElementById("ai-activity"),
   meetingTitle: document.getElementById("meeting-title"),
   copy: document.getElementById("copy"),
   download: document.getElementById("download"),
@@ -305,6 +306,9 @@ console.log('WS : ', wsurl);
       }
     } else if (msg.type === "analysis") {
       renderAnalysis(msg);
+    } else if (msg.type === "ai_running") {
+      aiServerRunning = !!msg.running;
+      updateAiIndicator();
     } else if (msg.type === "session_end") {
       // Server finished the end-of-meeting analyzers; stop() may be waiting.
       if (sessionEndResolve) { sessionEndResolve(); sessionEndResolve = null; }
@@ -557,6 +561,17 @@ els.savewav.onclick = () => {
   setTimeout(() => (els.savewav.textContent = "Save WAV"), 2000);
 };
 
+// ---- AI activity indicator -------------------------------------------------
+// Purple + pulsing while any AI runs: client-initiated LLM calls (the AI
+// Summary button) tracked by a counter, plus server-side background analyzers
+// reported over the WebSocket ({type:"ai_running"}).
+let aiClientCount = 0;   // in-flight client LLM requests
+let aiServerRunning = false; // server analyzer currently running
+function updateAiIndicator() {
+  els.aiActivity.classList.toggle("running", aiClientCount > 0 || aiServerRunning);
+  els.aiActivity.title = els.aiActivity.classList.contains("running") ? "AI running…" : "AI idle";
+}
+
 // ---- LLM post-processing ---------------------------------------------------
 // The server exposes POST /llm when an LLM endpoint is configured (see
 // LLM_BASE_URL in GO / docker-compose.yml). The prompt, model, and API key
@@ -571,6 +586,7 @@ els.llm.onclick = async () => {
   }
   els.llm.disabled = true;
   els.llm.textContent = "Processing…";
+  aiClientCount++; updateAiIndicator();
   try {
     const resp = await fetch(`llm`, {
       method: "POST",
@@ -593,6 +609,7 @@ els.llm.onclick = async () => {
   } finally {
     els.llm.disabled = false;
     els.llm.textContent = "AI Summary";
+    aiClientCount--; updateAiIndicator();
   }
 };
 
@@ -667,15 +684,77 @@ function adminHeaders() {
 const SCHEDULE_INTERVALS = [1, 2, 5, 10, 15, 30]; // minutes
 const MAX_ANALYZERS = 5;
 
+// Drag-to-reorder for the Admin analyzer rows. collectAnalyzers() reads order
+// from the DOM, so a reordered list persists (localStorage + server) on Save.
+let draggedItem = null;
+function getDragAfterElement(container, y) {
+  const rows = [...container.querySelectorAll(".admin-item:not(.dragging)")];
+  let closest = { offset: -Infinity, el: null };
+  for (const el of rows) {
+    const box = el.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) closest = { offset, el };
+  }
+  return closest.el;
+}
+els.adminList.addEventListener("dragover", (e) => {
+  if (!draggedItem) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const after = getDragAfterElement(els.adminList, e.clientY);
+  if (after == null) els.adminList.appendChild(draggedItem);
+  else els.adminList.insertBefore(draggedItem, after);
+});
+els.adminList.addEventListener("drop", (e) => e.preventDefault());
+
 function adminItemRow(a) {
   const item = document.createElement("div");
   item.className = "admin-item";
+  item.dataset.id = a.id || "";
+
+  // --- header: drag handle, fold caret, name (stays visible when collapsed) --
+  const head = document.createElement("div");
+  head.className = "admin-head";
+
+  const handle = document.createElement("span");
+  handle.className = "drag-handle";
+  handle.textContent = "⠿";
+  handle.title = "Drag to reorder";
+  handle.draggable = true;
+  handle.addEventListener("dragstart", (e) => {
+    draggedItem = item;
+    item.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", ""); } catch { /* Firefox needs data */ }
+  });
+  handle.addEventListener("dragend", () => {
+    item.classList.remove("dragging");
+    draggedItem = null;
+  });
+
+  const fold = document.createElement("button");
+  fold.type = "button";
+  fold.className = "fold";
+  fold.title = "Collapse / expand";
+  fold.textContent = "▾";
+  fold.onclick = () => {
+    const collapsed = item.classList.toggle("collapsed");
+    fold.textContent = collapsed ? "▸" : "▾";
+  };
 
   const name = document.createElement("input");
   name.type = "text";
   name.placeholder = "Name";
   name.value = a.name || "";
   name.dataset.field = "name";
+
+  head.appendChild(handle);
+  head.appendChild(fold);
+  head.appendChild(name);
+
+  // --- body: prompt + schedule row (hidden when collapsed) -----------------
+  const body = document.createElement("div");
+  body.className = "admin-body";
 
   const prompt = document.createElement("textarea");
   prompt.placeholder = "Prompt (system message; the transcript is the user message)";
@@ -731,10 +810,10 @@ function adminItemRow(a) {
   del.onclick = () => { item.remove(); syncAddButton(); };
   row.appendChild(del);
 
-  item.dataset.id = a.id || "";
-  item.appendChild(name);
-  item.appendChild(prompt);
-  item.appendChild(row);
+  body.appendChild(prompt);
+  body.appendChild(row);
+  item.appendChild(head);
+  item.appendChild(body);
   return item;
 }
 

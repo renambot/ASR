@@ -11,7 +11,7 @@
     :root {
       --bg: #0f1115; --panel: #171a21; --border: #262b36;
       --text: #e6e9ef; --muted: #8b93a3; --accent: #76b900; /* NVIDIA green */
-      --interim: #b9c0cd; --danger: #ff5c5c;
+      --interim: #b9c0cd; --danger: #ff5c5c; --ai: #a970ff; /* AI activity */
     }
     * { box-sizing: border-box; }
     body {
@@ -117,11 +117,26 @@
 
     /* Admin editor */
     .admin-item { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .admin-item.dragging { opacity: 0.5; }
+    .admin-head { display: flex; align-items: center; gap: 8px; }
+    .admin-head .drag-handle {
+      cursor: grab; color: var(--muted); user-select: none; font-size: 16px;
+      line-height: 1; padding: 0 2px; flex: 0 0 auto;
+    }
+    .admin-head .drag-handle:active { cursor: grabbing; }
+    .admin-head .fold {
+      background: none; border: none; color: var(--text); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 2px 6px; flex: 0 0 auto;
+    }
+    .admin-head .fold:hover { color: var(--accent); }
+    .admin-head input[type="text"] { flex: 1; width: auto; }
+    .admin-body { display: flex; flex-direction: column; gap: 6px; }
+    .admin-item.collapsed .admin-body { display: none; }
     .admin-item input[type="text"], .admin-item textarea, #admin-token {
       font: inherit; font-size: 15px; padding: 7px 9px; border-radius: 6px;
       border: 1px solid var(--border); background: var(--panel); color: var(--text); width: 100%;
     }
-    .admin-item textarea { resize: vertical; min-height: 70px; }
+    .admin-item textarea { resize: vertical; min-height: 140px; }
     .admin-item .row { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--muted); }
     .admin-item .row select {
       font: inherit; font-size: 14px; padding: 5px 7px; border-radius: 6px;
@@ -149,6 +164,16 @@
       align-items: center; font-size: 13px; color: var(--muted);
     }
     footer .spacer { margin-left: auto; }
+    /* AI activity indicator: grey when idle, purple + pulsing while running. */
+    #ai-activity {
+      display: flex; align-items: center; gap: 6px; color: var(--muted);
+      font-weight: 600; letter-spacing: 0.03em; transition: color 0.2s;
+    }
+    #ai-activity .ai-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: currentColor;
+    }
+    #ai-activity.running { color: var(--ai); }
+    #ai-activity.running .ai-dot { box-shadow: 0 0 8px var(--ai); animation: pulse 1s infinite; }
     .placeholder { color: var(--muted); font-style: italic; }
     #notice {
       background: #3a1d1d; color: #ffb4b4; border-bottom: 1px solid var(--danger);
@@ -234,6 +259,7 @@
   <footer>
     <span id="elapsed">00:00:00</span>
     <span id="words">0 words</span>
+    <span id="ai-activity" title="AI idle"><span class="ai-dot"></span> AI</span>
     <span class="spacer"></span>
     <button id="copy">Copy</button>
     <button id="download">Download .md</button>

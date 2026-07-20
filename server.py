@@ -619,6 +619,8 @@ class Bridge:
         if prev_result is not None:
             user += (f"\n\n---\nOutput of the previous analyzer "
                      f"\"{prev_name}\":\n{prev_result}")
+        # Tell the client an AI call is in flight (drives the activity indicator).
+        await send_json(self.browser, {"type": "ai_running", "running": True})
         try:
             out = await llm_chat(analyzer["prompt"], user)
         except RuntimeError as exc:
@@ -627,6 +629,8 @@ class Bridge:
                 "error": str(exc), "ts": time.time(),
             })
             return None
+        finally:
+            await send_json(self.browser, {"type": "ai_running", "running": False})
         log.info("analyzer %r (%s): %d chars -> %d chars",
                  analyzer["id"], analyzer["mode"], len(user), len(out["result"]))
         await send_json(self.browser, {
