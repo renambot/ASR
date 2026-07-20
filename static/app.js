@@ -24,6 +24,8 @@ const els = {
   download: document.getElementById("download"),
   savewav: document.getElementById("savewav"),
   clear: document.getElementById("clear"),
+  speakerList: document.getElementById("speaker-list"),
+  speakersEmpty: document.getElementById("speakers-empty"),
 };
 
 // --- Session state (reset/torn down by start()/stop()) ---
@@ -44,6 +46,21 @@ let interimText = "";   // current in-progress hypothesis (grey text)
 let startTime = 0;
 let elapsedTimer = null;
 let wantReconnect = false; // auto-reconnect the browser<->proxy socket while running
+
+// --- Speaker naming (diarization) ---
+// Custom names entered in the side panel, keyed by the raw speaker id the NIM
+// emits (usually "0", "1", …). Names apply to the rendered transcript AND to
+// Copy / Download, since both go through speakerLabel()/composeText().
+let speakerNames = {};   // speakerId -> custom name (kept across Clear)
+let knownSpeakers = [];  // speaker ids in order of first appearance
+const SPEAKER_COLORS = [
+  "#76b900", "#4da3ff", "#f5a623", "#ff5c8a",
+  "#b78cff", "#2fd6c3", "#ffd166", "#ff8c5c",
+];
+function speakerColor(s) {
+  const i = knownSpeakers.indexOf(String(s));
+  return SPEAKER_COLORS[(i >= 0 ? i : 0) % SPEAKER_COLORS.length];
+}
 
 // --------------------------------------------------------------------------
 // Device handling
@@ -83,30 +100,61 @@ function setState(cls, label) {
 
 function speakerLabel(s) {
   if (s === null || s === undefined) return null;
-  return /^\d+$/.test(String(s)) ? `Speaker ${s}` : String(s);
+  const key = String(s);
+  const custom = speakerNames[key] && speakerNames[key].trim();
+  if (custom) return custom;
+  return /^\d+$/.test(key) ? `Speaker ${key}` : key;
 }
 
-// Build the transcript text, starting a new line whenever the speaker changes.
-// With diarization off (speaker always null) this is just a space-joined flow.
-function composeText() {
-  const parts = [];
-  let last = null;
+// Group the committed segments into display lines, starting a new line
+// whenever the speaker changes. With diarization off (speaker always null)
+// this is a single space-joined flow.
+function composeLines() {
+  const lines = []; // {speaker, parts: []}
+  let last = undefined;
   for (const seg of finalSegments) {
     const lbl = speakerLabel(seg.speaker);
     if (lbl !== null && seg.speaker !== last) {
-      parts.push(`\n${lbl}: ${seg.text}`);
+      lines.push({ speaker: seg.speaker, parts: [seg.text] });
       last = seg.speaker;
     } else {
-      parts.push(seg.text);
+      if (lines.length === 0) lines.push({ speaker: null, parts: [] });
+      lines[lines.length - 1].parts.push(seg.text);
       if (lbl === null) last = null;
     }
   }
-  return parts.join(" ").replace(/ *\n */g, "\n").trim();
+  return lines
+    .map((l) => ({ speaker: l.speaker, text: l.parts.join(" ").trim() }))
+    .filter((l) => l.text);
+}
+
+// Build the plain-text transcript (used for Copy and Download .txt).
+// Custom speaker names from the side panel are applied here too.
+function composeText() {
+  return composeLines()
+    .map((l) => (l.speaker !== null && l.speaker !== undefined
+      ? `${speakerLabel(l.speaker)}: ${l.text}`
+      : l.text))
+    .join("\n")
+    .trim();
 }
 
 function renderTranscript() {
-  const text = composeText();
-  els.transcript.textContent = text ? text + (text.endsWith(" ") ? "" : " ") : "";
+  els.transcript.textContent = "";
+  const lines = composeLines();
+  for (const l of lines) {
+    const div = document.createElement("div");
+    div.className = "line";
+    if (l.speaker !== null && l.speaker !== undefined) {
+      const tag = document.createElement("span");
+      tag.className = "speaker-tag";
+      tag.style.color = speakerColor(l.speaker);
+      tag.textContent = `${speakerLabel(l.speaker)}: `;
+      div.appendChild(tag);
+    }
+    div.appendChild(document.createTextNode(l.text));
+    els.transcript.appendChild(div);
+  }
   els.transcript.appendChild(els.interim);
   els.interim.textContent = interimText;
   const words = finalSegments.reduce(
@@ -116,6 +164,52 @@ function renderTranscript() {
   const main = document.querySelector("main");
   const nearBottom = main.scrollHeight - main.scrollTop - main.clientHeight < 120;
   if (nearBottom) main.scrollTop = main.scrollHeight;
+}
+
+// --------------------------------------------------------------------------
+// Speaker side panel
+// --------------------------------------------------------------------------
+// Register a diarization speaker id the first time it appears and add an
+// editable name row to the side panel. Rows are appended (never rebuilt) so
+// typing in an input is not interrupted by incoming transcript events.
+function registerSpeaker(s) {
+  if (s === null || s === undefined) return;
+  const key = String(s);
+  if (knownSpeakers.includes(key)) return;
+  knownSpeakers.push(key);
+  addSpeakerRow(key);
+}
+
+function addSpeakerRow(key) {
+  els.speakersEmpty.style.display = "none";
+
+  const row = document.createElement("div");
+  row.className = "speaker-item";
+  row.dataset.speaker = key;
+
+  const swatch = document.createElement("span");
+  swatch.className = "speaker-swatch";
+  swatch.style.background = speakerColor(key);
+
+  const id = document.createElement("span");
+  id.className = "sp-id";
+  id.textContent = /^\d+$/.test(key) ? `S${key}` : key;
+  id.title = /^\d+$/.test(key) ? `Speaker ${key}` : key;
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = /^\d+$/.test(key) ? `Speaker ${key}` : key;
+  input.value = speakerNames[key] || "";
+  input.setAttribute("aria-label", `Name for speaker ${key}`);
+  input.addEventListener("input", () => {
+    speakerNames[key] = input.value;
+    renderTranscript();
+  });
+
+  row.appendChild(swatch);
+  row.appendChild(id);
+  row.appendChild(input);
+  els.speakerList.appendChild(row);
 }
 
 function fmtElapsed(ms) {
@@ -156,7 +250,10 @@ function connectWS() {
       renderTranscript();
     } else if (msg.type === "final") {
       const t = msg.text.trim();
-      if (t) finalSegments.push({ text: t, speaker: msg.speaker ?? null });
+      if (t) {
+        finalSegments.push({ text: t, speaker: msg.speaker ?? null });
+        registerSpeaker(msg.speaker ?? null);
+      }
       interimText = "";
       renderTranscript();
     } else if (msg.type === "status") {
@@ -344,6 +441,11 @@ els.clear.onclick = () => {
   if (!fullText() || confirm("Clear the transcript?")) {
     finalSegments = [];
     interimText = "";
+    // Reset the speaker panel; keep speakerNames so returning speaker ids
+    // (e.g. later in the same session) get their names back automatically.
+    knownSpeakers = [];
+    els.speakerList.textContent = "";
+    els.speakersEmpty.style.display = "";
     renderTranscript();
   }
 };
