@@ -731,9 +731,58 @@ function syncAddButton() {
     ? `Max ${MAX_ANALYZERS} prompts` : "+ Add analyzer";
 }
 
+// Persist the analyzer set in this browser so it survives server restarts and
+// is restored session to session. localStorage is the client's source of
+// truth; on load we re-apply it to the server (which is what actually runs the
+// analyzers), and every Save writes it back here.
+const ANALYZERS_LS_KEY = "asr.analyzers.v1";
+
+function readStoredAnalyzers() {
+  try {
+    const a = JSON.parse(localStorage.getItem(ANALYZERS_LS_KEY) || "null");
+    return Array.isArray(a) && a.length ? a : null;
+  } catch { return null; }
+}
+
+function writeStoredAnalyzers(analyzers) {
+  try { localStorage.setItem(ANALYZERS_LS_KEY, JSON.stringify(analyzers)); } catch {}
+}
+
+// Read the analyzer definitions out of the Admin editor rows.
+function collectAnalyzers() {
+  const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return [...els.adminList.querySelectorAll(".admin-item")].map((item) => {
+    const get = (f) => item.querySelector(`[data-field="${f}"]`);
+    const name = get("name").value.trim();
+    const sched = get("schedule").value;
+    const isInterval = sched !== "chain" && sched !== "on_stop";
+    return {
+      id: item.dataset.id || slug(name) || undefined,
+      name,
+      prompt: get("prompt").value.trim(),
+      mode: isInterval ? "interval" : sched,
+      interval_min: isInterval ? Number(sched) : 5,
+      enabled: get("enabled").checked,
+    };
+  });
+}
+
+// PUT the analyzer set to the server; returns the server-normalized result.
+async function pushAnalyzers(analyzers) {
+  const resp = await fetch(`admin/analyzers`, {
+    method: "PUT",
+    headers: adminHeaders(),
+    body: JSON.stringify({ analyzers }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  return data;
+}
+
 async function loadAdmin() {
   if (adminLoaded) return;
   els.adminStatus.textContent = "Loading…";
+  const stored = readStoredAnalyzers();
   try {
     const resp = await fetch(`admin/analyzers`, { headers: adminHeaders() });
     if (resp.status === 401) {
@@ -744,12 +793,32 @@ async function loadAdmin() {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
     els.adminAuth.hidden = !data.auth_required;
+
+    let analyzers = data.analyzers;
+    let restored = false;
+    if (stored) {
+      // This browser has a saved set: re-apply it so the server runs it, and
+      // show the normalized result. Fall back to showing the stored set if the
+      // apply fails (e.g. missing admin token).
+      try {
+        analyzers = (await pushAnalyzers(stored)).analyzers;
+      } catch {
+        analyzers = stored;
+      }
+      writeStoredAnalyzers(analyzers);
+      restored = true;
+    } else {
+      writeStoredAnalyzers(data.analyzers); // seed the store from server defaults
+    }
+
     els.adminList.textContent = "";
-    data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
     syncAddButton();
-    els.adminStatus.textContent = data.llm
-      ? `${data.analyzers.length} analyzer(s) loaded.`
-      : "Warning: no LLM configured on the server — analyzers will not run.";
+    els.adminStatus.textContent = !data.llm
+      ? "Warning: no LLM configured on the server — analyzers will not run."
+      : restored
+        ? `${analyzers.length} analyzer(s) restored from this browser.`
+        : `${analyzers.length} analyzer(s) loaded.`;
     adminLoaded = true;
   } catch (e) {
     els.adminStatus.textContent = `Load failed: ${e.message}`;
@@ -768,35 +837,15 @@ els.adminAdd.onclick = () => {
 };
 
 els.adminSave.onclick = async () => {
-  const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const analyzers = [...els.adminList.querySelectorAll(".admin-item")].map((item) => {
-    const get = (f) => item.querySelector(`[data-field="${f}"]`);
-    const name = get("name").value.trim();
-    const sched = get("schedule").value;
-    const isInterval = sched !== "chain" && sched !== "on_stop";
-    return {
-      id: item.dataset.id || slug(name) || undefined,
-      name,
-      prompt: get("prompt").value.trim(),
-      mode: isInterval ? "interval" : sched,
-      interval_min: isInterval ? Number(sched) : 5,
-      enabled: get("enabled").checked,
-    };
-  });
+  const analyzers = collectAnalyzers();
   els.adminSave.disabled = true;
   els.adminStatus.textContent = "Saving…";
   try {
-    const resp = await fetch(`admin/analyzers`, {
-      method: "PUT",
-      headers: adminHeaders(),
-      body: JSON.stringify({ analyzers }),
-    });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    const data = await pushAnalyzers(analyzers);
+    writeStoredAnalyzers(data.analyzers); // persist this browser's copy
     els.adminStatus.textContent = data.saved
-      ? "Saved (applies now; persisted to config file)."
-      : "Saved for this run (config file not writable).";
-    adminLoaded = false; // reload normalized values next open
+      ? "Saved (applies now; kept in this browser + server config file)."
+      : "Saved (applies now; kept in this browser).";
     els.adminList.textContent = "";
     data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
     syncAddButton();
@@ -864,3 +913,11 @@ els.refresh.onclick = () => ensurePermissionThenList();
 listDevices();
 navigator.mediaDevices.addEventListener?.("devicechange", listDevices);
 ensurePermissionThenList();
+
+// Re-apply this browser's saved analyzers to the server so they run session to
+// session even without opening the Admin tab. Best-effort: silently skipped if
+// the server requires an admin token (re-applied when it's entered in Admin).
+(async () => {
+  const stored = readStoredAnalyzers();
+  if (stored) { try { await pushAnalyzers(stored); } catch { /* needs token / offline */ } }
+})();
