@@ -140,7 +140,7 @@ def _validate_analyzers(items) -> list:
     """Normalize and validate an analyzer list; raises ValueError on bad input.
 
     Schedule modes:
-      interval -- runs every `interval_min` minutes (gated by min_new_chars)
+      interval -- runs every `interval_min` minutes
       chain    -- runs right after the previous analyzer in the list has run,
                   receiving that analyzer's output as extra context
       on_stop  -- runs once when the recording is stopped (end of meeting)
@@ -176,7 +176,6 @@ def _validate_analyzers(items) -> list:
             "prompt": prompt,
             "mode": mode,
             "interval_min": max(1, int(float(interval_min or 5))),
-            "min_new_chars": max(0, int(float(it.get("min_new_chars", 200)))),
             "enabled": bool(it.get("enabled", True)),
         })
     return out
@@ -537,11 +536,10 @@ class Bridge:
         sessions already in progress. Analyzers are processed sequentially in
         list order so 'chain' entries can fire right after their predecessor,
         with that predecessor's output as extra context:
-          interval -- due when interval_min elapsed AND min_new_chars of new
-                      transcript accumulated since its last run
+          interval -- due when interval_min has elapsed since its last run
           chain    -- due when the previous analyzer in the list just ran
           on_stop  -- skipped here; handled by _finalize() on Stop."""
-        self._analyzer_state: dict[str, dict] = {}  # id -> {"last": t, "len": n}
+        self._analyzer_state: dict[str, dict] = {}  # id -> {"last": t}
         while not self.stop.is_set():
             try:
                 await asyncio.wait_for(self.stop.wait(), timeout=ANALYZER_TICK_SEC)
@@ -561,11 +559,9 @@ class Bridge:
                     prev_ran = False
                     continue
                 if a["mode"] == "interval":
-                    st = self._analyzer_state.setdefault(a["id"], {"last": 0.0, "len": 0})
-                    if (now - st["last"] >= a["interval_min"] * 60
-                            and len(text) - st["len"] >= a["min_new_chars"]):
+                    st = self._analyzer_state.setdefault(a["id"], {"last": 0.0})
+                    if now - st["last"] >= a["interval_min"] * 60:
                         st["last"] = now
-                        st["len"] = len(text)
                         due = True
                 elif a["mode"] == "chain":
                     due = prev_ran

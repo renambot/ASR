@@ -20,6 +20,7 @@ const els = {
   interim: document.getElementById("interim"),
   elapsed: document.getElementById("elapsed"),
   words: document.getElementById("words"),
+  meetingTitle: document.getElementById("meeting-title"),
   copy: document.getElementById("copy"),
   download: document.getElementById("download"),
   savewav: document.getElementById("savewav"),
@@ -415,18 +416,32 @@ function fullText() {
   return composeText();
 }
 
+// Text as exported (Copy / Download): the transcript body prefixed with the
+// meeting title (if any) and the date. fullText() stays body-only so the LLM
+// input and the "clear?" content check aren't affected by the header.
+function exportText() {
+  const title = els.meetingTitle.value.trim();
+  const date = new Date().toLocaleDateString(undefined, {
+    year: "numeric", month: "long", day: "numeric",
+  });
+  const header = (title ? `${title}\n` : "") + date;
+  return `${header}\n\n${fullText()}`;
+}
+
 els.copy.onclick = async () => {
-  try { await navigator.clipboard.writeText(fullText()); els.copy.textContent = "Copied!"; }
+  try { await navigator.clipboard.writeText(exportText()); els.copy.textContent = "Copied!"; }
   catch { els.copy.textContent = "Copy failed"; }
   setTimeout(() => (els.copy.textContent = "Copy"), 1500);
 };
 
 els.download.onclick = () => {
-  const blob = new Blob([fullText() + "\n"], { type: "text/plain" });
+  const blob = new Blob([exportText() + "\n"], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  a.download = `transcript-${ts}.txt`;
+  const slug = els.meetingTitle.value.trim()
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  a.download = `${slug ? slug + "-" : "transcript-"}${ts}.txt`;
   a.click();
   URL.revokeObjectURL(a.href);
 };
@@ -635,23 +650,6 @@ function adminItemRow(a) {
   row.appendChild(runLabel);
   row.appendChild(sched);
 
-  const minSpan = document.createElement("span");
-  minSpan.textContent = "min chars";
-  const minChars = document.createElement("input");
-  minChars.type = "number";
-  minChars.value = a.min_new_chars ?? 200;
-  minChars.dataset.field = "min_new_chars";
-  // min_new_chars only gates the fixed-cadence mode.
-  const syncMin = () => {
-    const isInterval = sched.value !== "chain" && sched.value !== "on_stop";
-    minSpan.style.display = isInterval ? "" : "none";
-    minChars.style.display = isInterval ? "" : "none";
-  };
-  sched.addEventListener("change", syncMin);
-  syncMin();
-  row.appendChild(minSpan);
-  row.appendChild(minChars);
-
   const enabled = document.createElement("input");
   enabled.type = "checkbox";
   enabled.checked = a.enabled !== false;
@@ -715,7 +713,7 @@ els.adminToken.addEventListener("input", () => { adminLoaded = false; });
 els.adminAdd.onclick = () => {
   els.adminList.appendChild(adminItemRow({
     id: "", name: "", prompt: "", mode: "interval", interval_min: 5,
-    min_new_chars: 200, enabled: true,
+    enabled: true,
   }));
   syncAddButton();
 };
@@ -733,7 +731,6 @@ els.adminSave.onclick = async () => {
       prompt: get("prompt").value.trim(),
       mode: isInterval ? "interval" : sched,
       interval_min: isInterval ? Number(sched) : 5,
-      min_new_chars: Number(get("min_new_chars").value) || 0,
       enabled: get("enabled").checked,
     };
   });
