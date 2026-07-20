@@ -321,9 +321,11 @@ class Bridge:
         self.flush = asyncio.Event()  # browser asked to finalize buffered audio
         self.debug_pcm = bytearray() if DEBUG_AUDIO_DIR else None
         self.frames_sent = 0  # cumulative frames forwarded to the NIM
-        # Server-side copy of finalized segments, used by the background
-        # analyzers ("Speaker N: text" lines when diarization is on).
-        self.transcript_lines: list[str] = []
+        # Server-side copy of finalized segments for the background analyzers.
+        # Each is {"t": elapsed_seconds, "speaker": id|None, "text": str}; the
+        # analyzer transcript is rendered as "[MM:SS] <label>: text".
+        self.transcript_segments: list[dict] = []
+        self._t0: float | None = None  # monotonic time of the first segment
         # speaker id (str) -> custom name from the browser's Speakers panel, so
         # analyzers see "Alice: …" instead of "Speaker 0: …".
         self.speaker_names: dict[str, str] = {}
@@ -536,8 +538,13 @@ class Bridge:
                         speaker = _extract_speaker(evt)
                         if speaker is not None:
                             payload["speaker"] = speaker
-                    self.transcript_lines.append(
-                        f"Speaker {speaker}: {text}" if speaker is not None else text)
+                    if self._t0 is None:
+                        self._t0 = time.monotonic()
+                    self.transcript_segments.append({
+                        "t": time.monotonic() - self._t0,
+                        "speaker": speaker,
+                        "text": text,
+                    })
                     await send_json(self.browser, payload)
             elif etype == "error":
                 log.warning("NIM error event: %s", json.dumps(evt))
@@ -620,21 +627,24 @@ class Bridge:
             else:
                 prev_ran = False
 
+    @staticmethod
+    def _fmt_ts(seconds: float) -> str:
+        s = int(seconds)
+        return f"{s // 60:02d}:{s % 60:02d}"
+
     def _labeled_transcript(self) -> str:
-        """The transcript with custom speaker names applied (for analyzers).
-        Lines are "Speaker <id>: text"; swap the prefix for the browser-supplied
-        name when one exists."""
+        """Render the transcript for analyzers as "[MM:SS] <label>: text",
+        applying the browser-supplied custom speaker names when present."""
         names = {k: v.strip() for k, v in self.speaker_names.items() if v.strip()}
-        if not names:
-            return "\n".join(self.transcript_lines)
         out = []
-        for line in self.transcript_lines:
-            for sid, nm in names.items():
-                prefix = f"Speaker {sid}: "
-                if line.startswith(prefix):
-                    line = f"{nm}: {line[len(prefix):]}"
-                    break
-            out.append(line)
+        for seg in self.transcript_segments:
+            ts = self._fmt_ts(seg["t"])
+            sp = seg["speaker"]
+            if sp is not None:
+                label = names.get(str(sp)) or f"Speaker {sp}"
+                out.append(f"[{ts}] {label}: {seg['text']}")
+            else:
+                out.append(f"[{ts}] {seg['text']}")
         return "\n".join(out)
 
     async def _run_analyzer(self, analyzer: dict, text: str,
