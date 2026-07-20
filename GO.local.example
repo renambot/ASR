@@ -1,0 +1,14 @@
+# GO.local.example — copy to GO.local (git-ignored) and fill in your values.
+#
+#   cp GO.local.example GO.local
+#
+# GO sources GO.local at the end of its settings block, so anything you
+# `export` here overrides the defaults baked into GO. Use it for secrets and
+# personal endpoints you don't want committed.
+
+export LLM_BASE_URL=""     # OpenAI-compatible endpoint, e.g. https://host/v1
+export LLM_MODEL=""        # model name at that endpoint
+export LLM_API_KEY=""      # bearer token for that endpoint
+
+# export NIM_API_KEY=""    # bearer token for the ASR NIM
+# export ADMIN_TOKEN=""    # shared secret for the Admin tab

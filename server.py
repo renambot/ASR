@@ -128,6 +128,9 @@ ANALYZERS_CONFIG = os.getenv("ANALYZERS_CONFIG", "") or str(
 # Empty = admin endpoints are open; fine on a trusted LAN, set it otherwise.
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
+# Don't run the periodic analyzers until the transcript has at least this many
+# non-whitespace characters, so they don't fire on an empty/near-empty meeting.
+ANALYZER_MIN_CHARS = int(os.getenv("ANALYZER_MIN_CHARS", "40"))
 
 _analyzers: list = []
 
@@ -549,6 +552,9 @@ class Bridge:
             if not LLM_BASE_URL or not _analyzers:
                 continue
             text = "\n".join(self.transcript_lines)
+            # Wait until there's some actual transcript before analyzing.
+            if len(text.strip()) < ANALYZER_MIN_CHARS:
+                continue
             now = time.monotonic()
             prev_ran, prev_name, prev_result = False, None, None
             for a in _analyzers:

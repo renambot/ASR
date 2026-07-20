@@ -4,5 +4,7 @@ __pycache__
 *.pyc
 .gitignore
 GO
+GO.local
+.env
 deploy
 README.md

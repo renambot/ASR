@@ -19,7 +19,7 @@ services:
       NIM_PORT: "443"                      # 443 via nginx, or 9000/7777 direct
       NIM_PATH: "/asr/v1/realtime"         # /v1/realtime if hitting the NIM directly
       NIM_INTENT: "transcription"
-      NIM_API_KEY: ""                      # optional bearer token
+      NIM_API_KEY: "${NIM_API_KEY:-}"      # optional bearer token (from .env)
 
       # ---- ASR options ----------------------------------------------------
       ASR_MODEL: "cache-aware-parakeet-rnnt-en-US-asr-streaming-sortformer"
@@ -29,7 +29,7 @@ services:
       AUDIO_QUEUE_MAX: "100"
       MAX_SESSIONS: "20"                 # max simultaneous browser sessions (0 = unlimited)
       # ANALYZERS_CONFIG: "/data/analyzers.json"  # mount a volume to persist admin edits
-      ADMIN_TOKEN: ""                    # protects the Admin tab ("" = open)
+      ADMIN_TOKEN: "${ADMIN_TOKEN:-}"    # protects the Admin tab ("" = open; from .env)
 
       # Speaker diarization (needs the sortformer model)
       ASR_DIARIZATION: "true"
@@ -45,9 +45,11 @@ services:
 
       # ---- LLM post-processing (optional) ---------------------------------
       # OpenAI-compatible endpoint; empty LLM_BASE_URL disables the feature.
-      LLM_BASE_URL: ""                     # e.g. http://sage200.evl.uic.edu:8000/v1
-      LLM_MODEL: ""
-      LLM_API_KEY: ""
+      # Secrets/endpoints come from a git-ignored .env (see .env.example);
+      # each falls back to empty if unset. Override inline if you prefer.
+      LLM_BASE_URL: "${LLM_BASE_URL:-}"    # e.g. http://sage200.evl.uic.edu:8000/v1
+      LLM_MODEL: "${LLM_MODEL:-}"
+      LLM_API_KEY: "${LLM_API_KEY:-}"
       LLM_SYSTEM_PROMPT: ""                # "" = built-in meeting-summary prompt
       LLM_TEMPERATURE: "0.2"
       LLM_MAX_TOKENS: "1024"

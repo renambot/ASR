@@ -8,3 +8,7 @@ __pycache__/
 
 # OS
 .DS_Store
+
+# Local dev secrets / overrides (never commit real credentials)
+GO.local
+.env
