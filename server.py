@@ -33,7 +33,7 @@ from urllib.parse import urlencode
 
 import httpx
 import websockets
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -115,6 +115,77 @@ LLM_SYSTEM_PROMPT = os.getenv("LLM_SYSTEM_PROMPT", "") or (
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))
 LLM_TIMEOUT_SEC = float(os.getenv("LLM_TIMEOUT_SEC", "120"))
+
+# ---------------------------------------------------------------------------
+# Background analyzers: named prompts run periodically against the growing
+# transcript of each session (topics, suggestions, ...). Defaults come from a
+# JSON config file; they can be viewed/edited at runtime from the Admin tab
+# (GET/PUT /admin/analyzers). Requires the LLM above to be configured.
+# ---------------------------------------------------------------------------
+ANALYZERS_CONFIG = os.getenv("ANALYZERS_CONFIG", "") or str(
+    Path(__file__).parent / "analyzers.json")
+# Optional shared secret for the admin endpoints (sent as X-Admin-Token).
+# Empty = admin endpoints are open; fine on a trusted LAN, set it otherwise.
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
+
+_analyzers: list = []
+
+
+def _validate_analyzers(items) -> list:
+    """Normalize and validate an analyzer list; raises ValueError on bad input."""
+    if not isinstance(items, list):
+        raise ValueError("analyzers must be a list")
+    out, seen = [], set()
+    for it in items:
+        if not isinstance(it, dict):
+            raise ValueError("each analyzer must be an object")
+        aid = str(it.get("id", "")).strip()
+        name = str(it.get("name", "")).strip()
+        prompt = str(it.get("prompt", "")).strip()
+        if not aid or not name or not prompt:
+            raise ValueError("id, name, and prompt are required")
+        if aid in seen:
+            raise ValueError(f"duplicate analyzer id: {aid}")
+        seen.add(aid)
+        out.append({
+            "id": aid,
+            "name": name,
+            "prompt": prompt,
+            "interval_sec": max(5, int(float(it.get("interval_sec", 60)))),
+            "min_new_chars": max(0, int(float(it.get("min_new_chars", 200)))),
+            "enabled": bool(it.get("enabled", True)),
+        })
+    return out
+
+
+def load_analyzers() -> None:
+    global _analyzers
+    try:
+        with open(ANALYZERS_CONFIG, encoding="utf-8") as f:
+            _analyzers = _validate_analyzers(json.load(f))
+        log.info("Loaded %d analyzer(s) from %s", len(_analyzers), ANALYZERS_CONFIG)
+    except FileNotFoundError:
+        _analyzers = []
+        log.info("No analyzer config at %s; analyzers disabled", ANALYZERS_CONFIG)
+    except (json.JSONDecodeError, ValueError) as exc:
+        _analyzers = []
+        log.warning("Ignoring invalid analyzer config %s: %s", ANALYZERS_CONFIG, exc)
+
+
+def save_analyzers() -> bool:
+    """Best-effort persist of the current analyzers back to the config file."""
+    try:
+        with open(ANALYZERS_CONFIG, "w", encoding="utf-8") as f:
+            json.dump(_analyzers, f, indent=2)
+            f.write("\n")
+        return True
+    except OSError as exc:
+        log.warning("Could not persist analyzers to %s: %s", ANALYZERS_CONFIG, exc)
+        return False
+
+
+load_analyzers()
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -217,6 +288,9 @@ class Bridge:
         self.flush = asyncio.Event()  # browser asked to finalize buffered audio
         self.debug_pcm = bytearray() if DEBUG_AUDIO_DIR else None
         self.frames_sent = 0  # cumulative frames forwarded to the NIM
+        # Server-side copy of finalized segments, used by the background
+        # analyzers ("Speaker N: text" lines when diarization is on).
+        self.transcript_lines: list[str] = []
 
     # -- browser -> queue ---------------------------------------------------
     async def read_browser(self) -> None:
@@ -409,11 +483,14 @@ class Bridge:
                 text = evt.get("transcript", "")
                 if text:
                     payload = {"type": "final", "text": text}
+                    speaker = None
                     if DIARIZATION:
                         log.debug("NIM completed (diarization) full event: %s", json.dumps(evt))
                         speaker = _extract_speaker(evt)
                         if speaker is not None:
                             payload["speaker"] = speaker
+                    self.transcript_lines.append(
+                        f"Speaker {speaker}: {text}" if speaker is not None else text)
                     await send_json(self.browser, payload)
             elif etype == "error":
                 log.warning("NIM error event: %s", json.dumps(evt))
@@ -424,18 +501,70 @@ class Bridge:
             else:
                 log.debug("NIM unhandled event: %s", json.dumps(evt))
 
+    # -- background analyzers ------------------------------------------------
+    async def run_analyzers(self) -> None:
+        """Periodically run each enabled analyzer prompt over the transcript.
+
+        The registry is re-read every tick, so Admin-tab edits apply to
+        sessions already in progress. Each analyzer keeps its own schedule:
+        it fires when its interval has elapsed AND at least min_new_chars of
+        new transcript accumulated since its last run (cost control)."""
+        state: dict[str, dict] = {}  # analyzer id -> {"last": t, "len": n}
+        while not self.stop.is_set():
+            try:
+                await asyncio.wait_for(self.stop.wait(), timeout=ANALYZER_TICK_SEC)
+                break  # stop was set
+            except asyncio.TimeoutError:
+                pass
+            if not LLM_BASE_URL or not _analyzers:
+                continue
+            text = "\n".join(self.transcript_lines)
+            now = time.monotonic()
+            jobs = []
+            for a in _analyzers:
+                if not a.get("enabled", True):
+                    continue
+                st = state.setdefault(a["id"], {"last": 0.0, "len": 0})
+                if now - st["last"] < a["interval_sec"]:
+                    continue
+                if len(text) - st["len"] < a["min_new_chars"]:
+                    continue
+                st["last"] = now
+                st["len"] = len(text)
+                jobs.append(self._run_analyzer(a, text))
+            if jobs:
+                await asyncio.gather(*jobs, return_exceptions=True)
+
+    async def _run_analyzer(self, analyzer: dict, text: str) -> None:
+        try:
+            out = await llm_chat(analyzer["prompt"], text)
+        except RuntimeError as exc:
+            await send_json(self.browser, {
+                "type": "analysis", "id": analyzer["id"], "name": analyzer["name"],
+                "error": str(exc), "ts": time.time(),
+            })
+            return
+        log.info("analyzer %r: %d chars -> %d chars",
+                 analyzer["id"], len(text), len(out["result"]))
+        await send_json(self.browser, {
+            "type": "analysis", "id": analyzer["id"], "name": analyzer["name"],
+            "result": out["result"], "ts": time.time(),
+        })
+
     async def serve(self) -> None:
-        """Run the browser reader and the NIM manager until either ends, then
-        tear both down and (optionally) dump the captured debug audio."""
+        """Run the browser reader, the NIM manager, and the analyzer loop
+        until any ends, then tear everything down and (optionally) dump the
+        captured debug audio."""
         reader = asyncio.create_task(self.read_browser())
         nim = asyncio.create_task(self.run_nim())
+        analyzers = asyncio.create_task(self.run_analyzers())
         try:
             await asyncio.wait({reader, nim}, return_when=asyncio.FIRST_COMPLETED)
         finally:
             self.stop.set()
-            for t in (reader, nim):
+            for t in (reader, nim, analyzers):
                 t.cancel()
-            await asyncio.gather(reader, nim, return_exceptions=True)
+            await asyncio.gather(reader, nim, analyzers, return_exceptions=True)
             if self.debug_pcm is not None:
                 self._write_debug_wav()
 
@@ -488,6 +617,78 @@ async def config():
     }
 
 
+async def llm_chat(system: str, user: str) -> dict:
+    """One chat-completions call to the configured LLM.
+    Returns {"result", "model", "usage"}; raises RuntimeError on any failure."""
+    body = {
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": LLM_TEMPERATURE,
+        "max_tokens": LLM_MAX_TOKENS,
+    }
+    if LLM_MODEL:
+        body["model"] = LLM_MODEL
+    headers = {"Content-Type": "application/json"}
+    if LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
+    try:
+        async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SEC) as client:
+            resp = await client.post(
+                f"{LLM_BASE_URL}/chat/completions", json=body, headers=headers
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        return {
+            "result": data["choices"][0]["message"]["content"],
+            "model": data.get("model", LLM_MODEL),
+            "usage": data.get("usage") or {},
+        }
+    except httpx.HTTPStatusError as exc:
+        log.warning("LLM HTTP error: %s %s", exc.response.status_code, exc.response.text[:500])
+        raise RuntimeError(f"LLM returned {exc.response.status_code}.") from exc
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+        log.warning("LLM request failed: %r", exc)
+        raise RuntimeError("LLM request failed.") from exc
+
+
+def _admin_auth_error(request: Request):
+    """Return an error response if the admin token is required and wrong."""
+    if ADMIN_TOKEN and request.headers.get("x-admin-token", "") != ADMIN_TOKEN:
+        return JSONResponse({"error": "Invalid or missing admin token."}, status_code=401)
+    return None
+
+
+@app.get("/admin/analyzers")
+async def admin_get_analyzers(request: Request):
+    err = _admin_auth_error(request)
+    if err:
+        return err
+    return {"analyzers": _analyzers, "llm": bool(LLM_BASE_URL),
+            "auth_required": bool(ADMIN_TOKEN)}
+
+
+@app.put("/admin/analyzers")
+async def admin_put_analyzers(request: Request):
+    """Replace the analyzer set. Applies immediately to running sessions
+    (the per-session loop reads the registry each tick) and is persisted
+    back to the config file on a best-effort basis."""
+    global _analyzers
+    err = _admin_auth_error(request)
+    if err:
+        return err
+    try:
+        payload = await request.json()
+        new = _validate_analyzers(payload.get("analyzers"))
+    except (json.JSONDecodeError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    _analyzers = new
+    saved = save_analyzers()
+    log.info("Admin updated analyzers: %d item(s), persisted=%s", len(new), saved)
+    return {"ok": True, "saved": saved, "analyzers": _analyzers}
+
+
 @app.post("/llm")
 async def llm_process(payload: dict):
     """Run the transcript through the configured LLM and return the result.
@@ -502,40 +703,13 @@ async def llm_process(payload: dict):
     if not text:
         return JSONResponse({"error": "Empty transcript."}, status_code=400)
     system = (payload.get("instruction") or "").strip() or LLM_SYSTEM_PROMPT
-
-    body = {
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": text},
-        ],
-        "temperature": LLM_TEMPERATURE,
-        "max_tokens": LLM_MAX_TOKENS,
-    }
-    if LLM_MODEL:
-        body["model"] = LLM_MODEL
-    headers = {"Content-Type": "application/json"}
-    if LLM_API_KEY:
-        headers["Authorization"] = f"Bearer {LLM_API_KEY}"
-
     try:
-        async with httpx.AsyncClient(timeout=LLM_TIMEOUT_SEC) as client:
-            resp = await client.post(
-                f"{LLM_BASE_URL}/chat/completions", json=body, headers=headers
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        result = data["choices"][0]["message"]["content"]
-        usage = data.get("usage") or {}
-        log.info("LLM processed %d chars -> %d chars (model=%s)",
-                 len(text), len(result), data.get("model", LLM_MODEL or "?"))
-        return {"result": result, "model": data.get("model", LLM_MODEL), "usage": usage}
-    except httpx.HTTPStatusError as exc:
-        log.warning("LLM HTTP error: %s %s", exc.response.status_code, exc.response.text[:500])
-        return JSONResponse(
-            {"error": f"LLM returned {exc.response.status_code}."}, status_code=502)
-    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
-        log.warning("LLM request failed: %r", exc)
-        return JSONResponse({"error": "LLM request failed."}, status_code=502)
+        out = await llm_chat(system, text)
+    except RuntimeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=502)
+    log.info("LLM processed %d chars -> %d chars (model=%s)",
+             len(text), len(out["result"]), out["model"] or "?")
+    return out
 
 
 @app.get("/")

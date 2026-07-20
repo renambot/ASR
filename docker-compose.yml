@@ -28,6 +28,8 @@ services:
       AUTO_PUNCT: "true"
       AUDIO_QUEUE_MAX: "100"
       MAX_SESSIONS: "20"                 # max simultaneous browser sessions (0 = unlimited)
+      # ANALYZERS_CONFIG: "/data/analyzers.json"  # mount a volume to persist admin edits
+      ADMIN_TOKEN: ""                    # protects the Admin tab ("" = open)
 
       # Speaker diarization (needs the sortformer model)
       ASR_DIARIZATION: "true"

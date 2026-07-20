@@ -1,0 +1,18 @@
+[
+  {
+    "id": "topics",
+    "name": "Topics",
+    "prompt": "You are given the running transcript of a live meeting, possibly with speaker labels. List the main topics discussed so far as short bullet points (max 8). Plain text only, most recent topics last.",
+    "interval_sec": 60,
+    "min_new_chars": 300,
+    "enabled": true
+  },
+  {
+    "id": "suggestions",
+    "name": "Suggestions",
+    "prompt": "You are given the running transcript of a live meeting. Based on what is being discussed, suggest up to 5 concrete resources, next steps, or questions the participants may find useful right now. Short bullet points, plain text only.",
+    "interval_sec": 90,
+    "min_new_chars": 400,
+    "enabled": true
+  }
+]

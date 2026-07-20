@@ -33,6 +33,14 @@ const els = {
   llmTitle: document.getElementById("llm-title"),
   llmCopy: document.getElementById("llm-copy"),
   llmClose: document.getElementById("llm-close"),
+  analysisList: document.getElementById("analysis-list"),
+  analysisEmpty: document.getElementById("analysis-empty"),
+  adminList: document.getElementById("admin-list"),
+  adminAdd: document.getElementById("admin-add"),
+  adminSave: document.getElementById("admin-save"),
+  adminStatus: document.getElementById("admin-status"),
+  adminAuth: document.getElementById("admin-auth"),
+  adminToken: document.getElementById("admin-token"),
 };
 
 // Show/hide the banner used for capacity and similar user-facing messages.
@@ -282,6 +290,8 @@ function connectWS() {
           "The server is at capacity right now. Please try again later.");
         stop().catch(() => {}).finally(() => setState("error", "server full"));
       }
+    } else if (msg.type === "analysis") {
+      renderAnalysis(msg);
     } else if (msg.type === "error") {
       setState("error", "ASR error");
       console.error("ASR error:", msg.message);
@@ -509,6 +519,187 @@ fetch("/config")
   .then((r) => r.json())
   .then((cfg) => { if (cfg.llm) els.llm.hidden = false; })
   .catch(() => {});
+
+// ---- Side panel tabs -------------------------------------------------------
+document.querySelectorAll(".tabs .tab").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".tabs .tab").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".tab-body").forEach((s) => (s.hidden = s.id !== `tab-${btn.dataset.tab}`));
+    if (btn.dataset.tab === "admin") loadAdmin();
+  };
+});
+
+// ---- Analysis tab ----------------------------------------------------------
+// The server runs the analyzer prompts in the background during a session and
+// pushes {type:"analysis", id, name, result|error, ts} messages. One card per
+// analyzer id, updated in place.
+function renderAnalysis(msg) {
+  els.analysisEmpty.style.display = "none";
+  let card = els.analysisList.querySelector(`[data-analyzer="${CSS.escape(msg.id)}"]`);
+  if (!card) {
+    card = document.createElement("div");
+    card.className = "analysis-card";
+    card.dataset.analyzer = msg.id;
+    const head = document.createElement("div");
+    head.className = "a-head";
+    const name = document.createElement("span");
+    name.className = "a-name";
+    const time = document.createElement("span");
+    time.className = "a-time";
+    head.appendChild(name);
+    head.appendChild(time);
+    const body = document.createElement("div");
+    body.className = "a-body";
+    card.appendChild(head);
+    card.appendChild(body);
+    els.analysisList.appendChild(card);
+  }
+  card.querySelector(".a-name").textContent = msg.name || msg.id;
+  card.querySelector(".a-time").textContent =
+    new Date((msg.ts || Date.now() / 1000) * 1000).toLocaleTimeString();
+  const body = card.querySelector(".a-body");
+  body.textContent = msg.error ? `Error: ${msg.error}` : msg.result;
+  body.classList.toggle("error", !!msg.error);
+}
+
+// ---- Admin tab -------------------------------------------------------------
+// Edits the server-side analyzer registry (GET/PUT /admin/analyzers). Defaults
+// come from analyzers.json on the server; saving applies immediately to
+// running sessions and persists back to that file when writable.
+let adminLoaded = false;
+
+function adminHeaders() {
+  const h = { "Content-Type": "application/json" };
+  if (els.adminToken.value) h["X-Admin-Token"] = els.adminToken.value;
+  return h;
+}
+
+function adminItemRow(a) {
+  const item = document.createElement("div");
+  item.className = "admin-item";
+
+  const name = document.createElement("input");
+  name.type = "text";
+  name.placeholder = "Name";
+  name.value = a.name || "";
+  name.dataset.field = "name";
+
+  const prompt = document.createElement("textarea");
+  prompt.placeholder = "Prompt (system message; the transcript is the user message)";
+  prompt.value = a.prompt || "";
+  prompt.dataset.field = "prompt";
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const mk = (label, field, value) => {
+    const span = document.createElement("span");
+    span.textContent = label;
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.value = value;
+    inp.dataset.field = field;
+    row.appendChild(span);
+    row.appendChild(inp);
+    return inp;
+  };
+  mk("every (s)", "interval_sec", a.interval_sec ?? 60);
+  mk("min chars", "min_new_chars", a.min_new_chars ?? 200);
+
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.checked = a.enabled !== false;
+  enabled.dataset.field = "enabled";
+  const enLabel = document.createElement("label");
+  enLabel.style.display = "flex";
+  enLabel.style.alignItems = "center";
+  enLabel.style.gap = "4px";
+  enLabel.appendChild(enabled);
+  enLabel.appendChild(document.createTextNode("on"));
+  row.appendChild(enLabel);
+
+  const del = document.createElement("button");
+  del.className = "del";
+  del.textContent = "Delete";
+  del.onclick = () => item.remove();
+  row.appendChild(del);
+
+  item.dataset.id = a.id || "";
+  item.appendChild(name);
+  item.appendChild(prompt);
+  item.appendChild(row);
+  return item;
+}
+
+async function loadAdmin() {
+  if (adminLoaded) return;
+  els.adminStatus.textContent = "Loading…";
+  try {
+    const resp = await fetch("/admin/analyzers", { headers: adminHeaders() });
+    if (resp.status === 401) {
+      els.adminAuth.hidden = false;
+      els.adminStatus.textContent = "Enter the admin token, then reopen this tab.";
+      return;
+    }
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    els.adminAuth.hidden = !data.auth_required;
+    els.adminList.textContent = "";
+    data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    els.adminStatus.textContent = data.llm
+      ? `${data.analyzers.length} analyzer(s) loaded.`
+      : "Warning: no LLM configured on the server — analyzers will not run.";
+    adminLoaded = true;
+  } catch (e) {
+    els.adminStatus.textContent = `Load failed: ${e.message}`;
+  }
+}
+
+// Token edits should retrigger a load on next open.
+els.adminToken.addEventListener("input", () => { adminLoaded = false; });
+
+els.adminAdd.onclick = () => {
+  els.adminList.appendChild(adminItemRow({
+    id: "", name: "", prompt: "", interval_sec: 60, min_new_chars: 200, enabled: true,
+  }));
+};
+
+els.adminSave.onclick = async () => {
+  const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const analyzers = [...els.adminList.querySelectorAll(".admin-item")].map((item) => {
+    const get = (f) => item.querySelector(`[data-field="${f}"]`);
+    const name = get("name").value.trim();
+    return {
+      id: item.dataset.id || slug(name) || undefined,
+      name,
+      prompt: get("prompt").value.trim(),
+      interval_sec: Number(get("interval_sec").value) || 60,
+      min_new_chars: Number(get("min_new_chars").value) || 0,
+      enabled: get("enabled").checked,
+    };
+  });
+  els.adminSave.disabled = true;
+  els.adminStatus.textContent = "Saving…";
+  try {
+    const resp = await fetch("/admin/analyzers", {
+      method: "PUT",
+      headers: adminHeaders(),
+      body: JSON.stringify({ analyzers }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    els.adminStatus.textContent = data.saved
+      ? "Saved (applies now; persisted to config file)."
+      : "Saved for this run (config file not writable).";
+    adminLoaded = false; // reload normalized values next open
+    els.adminList.textContent = "";
+    data.analyzers.forEach((a) => els.adminList.appendChild(adminItemRow(a)));
+    adminLoaded = true;
+  } catch (e) {
+    els.adminStatus.textContent = `Save failed: ${e.message}`;
+  } finally {
+    els.adminSave.disabled = false;
+  }
+};
 
 els.clear.onclick = () => {
   if (!fullText() || confirm("Clear the transcript?")) {
