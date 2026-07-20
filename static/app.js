@@ -47,6 +47,7 @@ const els = {
   adminAdd: document.getElementById("admin-add"),
   adminSave: document.getElementById("admin-save"),
   adminReset: document.getElementById("admin-reset"),
+  adminRunAll: document.getElementById("admin-run-all"),
   adminStatus: document.getElementById("admin-status"),
   adminAuth: document.getElementById("admin-auth"),
   adminToken: document.getElementById("admin-token"),
@@ -757,9 +758,17 @@ function adminItemRow(a) {
   name.value = a.name || "";
   name.dataset.field = "name";
 
+  const run = document.createElement("button");
+  run.type = "button";
+  run.className = "run-now";
+  run.textContent = "Run";
+  run.title = "Run this analyzer now on the current transcript";
+  run.onclick = () => runAnalyzers([collectAnalyzerItem(item)]);
+
   head.appendChild(handle);
   head.appendChild(fold);
   head.appendChild(name);
+  head.appendChild(run);
 
   // --- body: prompt + schedule row (hidden when collapsed) -----------------
   const body = document.createElement("div");
@@ -850,23 +859,41 @@ function writeStoredAnalyzers(analyzers) {
   try { localStorage.setItem(ANALYZERS_LS_KEY, JSON.stringify(analyzers)); } catch {}
 }
 
-// Read the analyzer definitions out of the Admin editor rows.
-function collectAnalyzers() {
+// Read one Admin editor row into an analyzer definition.
+function collectAnalyzerItem(item) {
   const slug = (s) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  return [...els.adminList.querySelectorAll(".admin-item")].map((item) => {
-    const get = (f) => item.querySelector(`[data-field="${f}"]`);
-    const name = get("name").value.trim();
-    const sched = get("schedule").value;
-    const isInterval = sched !== "chain" && sched !== "on_stop";
-    return {
-      id: item.dataset.id || slug(name) || undefined,
-      name,
-      prompt: get("prompt").value.trim(),
-      mode: isInterval ? "interval" : sched,
-      interval_min: isInterval ? Number(sched) : 5,
-      enabled: get("enabled").checked,
-    };
-  });
+  const get = (f) => item.querySelector(`[data-field="${f}"]`);
+  const name = get("name").value.trim();
+  const sched = get("schedule").value;
+  const isInterval = sched !== "chain" && sched !== "on_stop";
+  return {
+    id: item.dataset.id || slug(name) || undefined,
+    name,
+    prompt: get("prompt").value.trim(),
+    mode: isInterval ? "interval" : sched,
+    interval_min: isInterval ? Number(sched) : 5,
+    enabled: get("enabled").checked,
+  };
+}
+
+// Read the analyzer definitions out of all Admin editor rows.
+function collectAnalyzers() {
+  return [...els.adminList.querySelectorAll(".admin-item")].map(collectAnalyzerItem);
+}
+
+// Force-run analyzers now on the live transcript. Requires an active session
+// (that's where the transcript lives); results appear in the Analysis panel.
+function runAnalyzers(list) {
+  const items = list.filter((a) => a.prompt);
+  if (!items.length) { els.adminStatus.textContent = "Nothing to run (empty prompt)."; return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    els.adminStatus.textContent = "Start recording first — analyzers run on the live transcript.";
+    return;
+  }
+  try { ws.send(JSON.stringify({ type: "run_analyzers", analyzers: items })); } catch {}
+  els.adminStatus.textContent = items.length === 1
+    ? `Running “${items[0].name || items[0].id}” now…`
+    : `Running ${items.length} analyzer(s) now…`;
 }
 
 // PUT the analyzer set to the server; returns the server-normalized result.
@@ -958,6 +985,8 @@ els.adminSave.onclick = async () => {
     els.adminSave.disabled = false;
   }
 };
+
+els.adminRunAll.onclick = () => runAnalyzers(collectAnalyzers());
 
 // Discard this browser's saved analyzers and reload the server's defaults
 // (re-read from the server's config file). Clears localStorage so the browser

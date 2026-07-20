@@ -130,6 +130,7 @@
     }
     .admin-head .fold:hover { color: var(--accent); }
     .admin-head input[type="text"] { flex: 1; width: auto; }
+    .admin-head .run-now { flex: 0 0 auto; font-size: 12px; padding: 4px 10px; }
     .admin-body { display: flex; flex-direction: column; gap: 6px; }
     .admin-item.collapsed .admin-body { display: none; }
     .admin-item input[type="text"], .admin-item textarea, #admin-token {
@@ -141,7 +142,7 @@
     .admin-item .row select {
       font: inherit; font-size: 14px; padding: 5px 7px; border-radius: 6px;
       border: 1px solid var(--border); background: var(--panel); color: var(--text);
-      max-width: 150px;
+      max-width: 120px; min-width: 0;
     }
     .admin-item .row input[type="number"] {
       width: 70px; font: inherit; font-size: 13px; padding: 4px 6px; border-radius: 6px;
@@ -150,6 +151,11 @@
     .admin-item .row .del { margin-left: auto; color: var(--danger); border-color: var(--danger); padding: 5px 9px; font-size: 14px; }
     .admin-actions { display: flex; gap: 8px; }
     .admin-actions button { flex: 1; font-size: 14px; }
+    #admin-run-all {
+      width: 100%; font-size: 14px; margin-top: 8px; font-weight: 600;
+      background: #2f6fed; border-color: #2f6fed; color: #fff;
+    }
+    #admin-run-all:hover { background: #4380f5; border-color: #4380f5; }
     #admin-reset { width: 100%; font-size: 13px; margin-top: 8px; color: var(--muted); }
     #admin-reset:hover { color: var(--text); }
     #admin-status { font-size: 13px; color: var(--muted); min-height: 16px; margin-top: 8px; }
@@ -253,6 +259,7 @@
           <button id="admin-add">+ Add analyzer</button>
           <button id="admin-save" class="primary">Save</button>
         </div>
+        <button id="admin-run-all" title="Run every analyzer now on the current transcript">Run all now</button>
         <button id="admin-reset" title="Discard this browser's saved set and reload the server's default analyzers">Reset to server defaults</button>
         <div id="admin-status"></div>
       </section>

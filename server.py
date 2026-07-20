@@ -399,6 +399,12 @@ class Bridge:
             names = evt.get("names")
             if isinstance(names, dict):
                 self.speaker_names = {str(k): str(v) for k, v in names.items()}
+        elif etype == "run_analyzers":
+            # Force-run the given analyzers now against the current transcript
+            # (Admin "Run now" / "Run all"), bypassing the schedule.
+            analyzers = evt.get("analyzers")
+            if isinstance(analyzers, list) and analyzers:
+                asyncio.create_task(self._run_forced(analyzers))
 
     # -- NIM connection manager --------------------------------------------
     async def run_nim(self) -> None:
@@ -674,6 +680,40 @@ class Bridge:
             "result": out["result"], "ts": time.time(),
         })
         return out["result"]
+
+    async def _run_forced(self, analyzers: list) -> None:
+        """Run the given analyzers now (Admin Run now / Run all), ignoring the
+        schedule. Honors 'chain' ordering when several are run together."""
+        if not LLM_BASE_URL:
+            return
+        text = self._labeled_transcript()
+        prev_ran, prev_name, prev_result = False, None, None
+        for a in analyzers:
+            if not isinstance(a, dict):
+                prev_ran = False
+                continue
+            analyzer = {
+                "id": str(a.get("id") or a.get("name") or "analyzer"),
+                "name": str(a.get("name") or "Analyzer"),
+                "prompt": str(a.get("prompt") or ""),
+                "mode": str(a.get("mode") or "interval"),
+            }
+            if not analyzer["prompt"].strip():
+                prev_ran = False
+                continue
+            if not text.strip():
+                await send_json(self.browser, {
+                    "type": "analysis", "id": analyzer["id"], "name": analyzer["name"],
+                    "error": "No transcript yet.", "ts": time.time(),
+                })
+                prev_ran = False
+                continue
+            is_chain = analyzer["mode"] == "chain" and prev_ran
+            result = await self._run_analyzer(
+                analyzer, text,
+                prev_name=prev_name if is_chain else None,
+                prev_result=prev_result if is_chain else None)
+            prev_ran, prev_name, prev_result = result is not None, analyzer["name"], result
 
     async def _finalize(self) -> None:
         """Handle Stop from the browser: run the on_stop analyzers while the
