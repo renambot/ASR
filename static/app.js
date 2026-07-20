@@ -297,7 +297,10 @@ console.log('WS : ', wsurl);
     } else if (msg.type === "final") {
       const t = msg.text.trim();
       if (t) {
-        finalSegments.push({ text: t, speaker: msg.speaker ?? null });
+        finalSegments.push({
+          text: t, speaker: msg.speaker ?? null,
+          ms: startTime ? Date.now() - startTime : 0, // elapsed for analyzer timestamps
+        });
         registerSpeaker(msg.speaker ?? null);
       }
       interimText = "";
@@ -881,19 +884,46 @@ function collectAnalyzers() {
   return [...els.adminList.querySelectorAll(".admin-item")].map(collectAnalyzerItem);
 }
 
-// Force-run analyzers now on the live transcript. Requires an active session
-// (that's where the transcript lives); results appear in the Analysis panel.
-function runAnalyzers(list) {
+// Timestamped, name-applied transcript for analyzers ("[MM:SS] Label: text"),
+// mirroring the server's format so prompts (e.g. Speakers) can cite times.
+function analyzerTranscript() {
+  const fmt = (ms) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  };
+  return finalSegments.map((seg) => {
+    const ts = fmt(seg.ms || 0);
+    const label = (seg.speaker !== null && seg.speaker !== undefined) ? speakerLabel(seg.speaker) : null;
+    return label ? `[${ts}] ${label}: ${seg.text}` : `[${ts}] ${seg.text}`;
+  }).join("\n");
+}
+
+// Force-run analyzers now on the current transcript. Stateless (POST /analyze),
+// so it works during, paused, or after recording; results render in the panel.
+async function runAnalyzers(list) {
   const items = list.filter((a) => a.prompt);
   if (!items.length) { els.adminStatus.textContent = "Nothing to run (empty prompt)."; return; }
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    els.adminStatus.textContent = "Start recording first — analyzers run on the live transcript.";
-    return;
-  }
-  try { ws.send(JSON.stringify({ type: "run_analyzers", analyzers: items })); } catch {}
+  const text = analyzerTranscript().trim();
+  if (!text) { els.adminStatus.textContent = "No transcript to analyze yet."; return; }
   els.adminStatus.textContent = items.length === 1
-    ? `Running “${items[0].name || items[0].id}” now…`
-    : `Running ${items.length} analyzer(s) now…`;
+    ? `Running “${items[0].name || items[0].id}”…`
+    : `Running ${items.length} analyzer(s)…`;
+  aiClientCount++; updateAiIndicator();
+  try {
+    const resp = await fetch(`analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, analyzers: items }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+    (data.results || []).forEach((r) => renderAnalysis({ ...r, ts: Date.now() / 1000 }));
+    els.adminStatus.textContent = `Ran ${(data.results || []).length} analyzer(s).`;
+  } catch (e) {
+    els.adminStatus.textContent = `Run failed: ${e.message}`;
+  } finally {
+    aiClientCount--; updateAiIndicator();
+  }
 }
 
 // PUT the analyzer set to the server; returns the server-normalized result.
