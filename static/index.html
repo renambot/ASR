@@ -61,6 +61,7 @@
     }
     .tabs .tab.active { color: var(--text); border-bottom-color: var(--accent); }
     .tab-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .tab-body[hidden] { display: none; } /* display:flex above would otherwise defeat [hidden] */
     #speaker-list { display: flex; flex-direction: column; gap: 10px; }
     .speaker-item { display: flex; align-items: center; gap: 8px; }
     .speaker-swatch { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
