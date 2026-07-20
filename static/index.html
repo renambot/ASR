@@ -104,7 +104,9 @@
     #speakers-empty, #analysis-empty { font-size: 14px; color: var(--muted); font-style: italic; }
 
     /* Analysis cards */
-    .analysis-card { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; }
+    /* flex:0 0 auto so cards keep their natural height and the list scrolls
+       (overflow:hidden here would otherwise let flex shrink them to nothing). */
+    .analysis-card { border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; flex: 0 0 auto; }
     .analysis-card .a-head {
       display: flex; align-items: baseline; gap: 8px; padding: 8px 10px;
       border-bottom: 1px solid var(--border); font-size: 12px; font-weight: 600;
@@ -176,6 +178,7 @@
       <select id="mic" title="Microphone"></select>
       <button id="refresh" title="Refresh device list">↻</button>
       <button id="toggle" class="primary">Start</button>
+      <button id="pause" title="Pause sending audio (keeps the session open)" hidden>Pause</button>
       <div class="status"><span id="dot" class="dot"></span><span id="state">idle</span></div>
     </div>
   </header>

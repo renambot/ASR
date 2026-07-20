@@ -14,6 +14,7 @@ const els = {
   mic: document.getElementById("mic"),
   refresh: document.getElementById("refresh"),
   toggle: document.getElementById("toggle"),
+  pause: document.getElementById("pause"),
   dot: document.getElementById("dot"),
   state: document.getElementById("state"),
   transcript: document.getElementById("transcript"),
@@ -52,6 +53,7 @@ function showNotice(text) {
 
 // --- Session state (reset/torn down by start()/stop()) ---
 let running = false;   // a capture session is active
+let paused = false;    // session live but audio frames are not being sent
 let ws = null;         // WebSocket to the proxy
 let audioCtx = null;   // Web Audio context (runs at `sampleRate`)
 let workletNode = null;// PCM capture/resample worklet
@@ -345,6 +347,7 @@ async function start() {
     processorOptions: { targetRate: sampleRate },
   });
   workletNode.port.onmessage = (ev) => {
+    if (paused) return; // paused: drop frames so no audio is sent or captured
     // Capture a copy for debugging before sending (up to the cap).
     if (debugBytes() < DEBUG_MAX_BYTES) debugChunks.push(new Uint8Array(ev.data.slice(0)));
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(ev.data);
@@ -362,8 +365,11 @@ async function start() {
   connectWS();
 
   running = true;
+  paused = false;
   els.toggle.textContent = "Stop";
   els.toggle.classList.remove("primary");
+  els.pause.textContent = "Pause";
+  els.pause.hidden = false;
   els.mic.disabled = true;
   startTime = Date.now() - 0;
   if (!elapsedTimer) {
@@ -376,9 +382,11 @@ async function start() {
 // End the session: stop capture, flush the tail, tear down the audio graph.
 async function stop() {
   running = false;
+  paused = false;
   wantReconnect = false;
   els.toggle.textContent = "Start";
   els.toggle.classList.add("primary");
+  els.pause.hidden = true;
   els.mic.disabled = false;
 
   // Stop capturing first so no new audio is queued.
@@ -818,6 +826,26 @@ els.toggle.onclick = async () => {
     await stop().catch(() => {});
   } finally {
     els.toggle.disabled = false;
+  }
+};
+
+// Pause/resume: stop (or resume) sending audio while keeping the session and
+// the socket open. Frames are dropped in the worklet handler; we also mute the
+// mic track so nothing is captured, and flush on pause so the last spoken
+// segment still gets transcribed.
+els.pause.onclick = () => {
+  if (!running) return;
+  paused = !paused;
+  if (mediaStream) mediaStream.getAudioTracks().forEach((t) => { t.enabled = !paused; });
+  if (paused) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ type: "flush" })); } catch {}
+    }
+    els.pause.textContent = "Resume";
+    setState("", "paused");
+  } else {
+    els.pause.textContent = "Pause";
+    setState("connected", "listening");
   }
 };
 
