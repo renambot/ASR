@@ -103,6 +103,7 @@ Then open **http://localhost:8080**.
 | `ANALYZERS_CONFIG` | `./analyzers.json` | JSON file with the default background analyzer prompts (max 5). Each runs on a schedule chosen in the Admin tab: every N minutes, chained after the previous prompt (receiving its output as context), or once when the recording stops |
 | `ANALYZER_MIN_CHARS` | `40` | the periodic analyzers wait until the transcript has at least this many characters before running (avoids firing on an empty meeting) |
 | `ADMIN_TOKEN` | *(empty)* | shared secret for the Admin tab / `/admin/analyzers` endpoints; empty = open |
+| `BASE_PATH` | *(empty)* | serve the whole app (page, static, `/ws`, `/config`, `/llm`, `/admin`) under a sub-path, e.g. `/asr`, for reverse-proxy deployments; empty = root. The proxy must forward the path unchanged (do not strip the prefix) |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |
 
@@ -125,6 +126,25 @@ set `SSL_CERT` and `SSL_KEY` in `GO` and it passes them to uvicorn.
 WebSocket upgrade headers and long read timeouts required for multi-hour
 streaming. Put the `map $http_upgrade …` block in the `http{}` context, adjust
 the hostname/cert/upstream port, then `nginx -t && nginx -s reload`.
+
+### Serving the app under a sub-path
+
+Set `BASE_PATH` (e.g. `/live-asr`) and forward the path **unchanged** — do not
+strip the prefix (note there is no trailing slash on `proxy_pass`):
+
+```nginx
+location /live-asr/ {
+    proxy_pass http://127.0.0.1:8080;   # no trailing slash: keeps the /live-asr prefix
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade    $http_upgrade;   # WebSocket (/live-asr/ws)
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host       $host;
+    proxy_read_timeout 3600s;
+}
+```
+
+The server then serves the page, static assets, `/ws`, `/config`, `/llm` and
+`/admin` all under `/live-asr`, and redirects `/` there.
 
 ## Notes on "runs indefinitely"
 

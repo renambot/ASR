@@ -34,7 +34,7 @@ from urllib.parse import urlencode
 import httpx
 import websockets
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # DEBUG=true surfaces the per-frame / per-event tracing used during bring-up.
@@ -98,6 +98,14 @@ COMMIT_INTERVAL = float(os.getenv("COMMIT_INTERVAL_SEC", "2.0"))
 # realtime stream on the NIM, so this protects the GPU from being oversubscribed.
 # Set to 0 to disable the limit.
 MAX_SESSIONS = int(os.getenv("MAX_SESSIONS", "20"))
+
+# Base URL path to serve the whole app under, for deploying behind a reverse
+# proxy at a sub-path (e.g. BASE_PATH="/asr" -> the page, static files, /ws,
+# /config, /llm and /admin all live under /asr). Empty = serve at the root.
+# The proxy must forward the path unchanged (do not strip the prefix).
+BASE_PATH = "/" + os.getenv("BASE_PATH", "").strip().strip("/")
+if BASE_PATH == "/":
+    BASE_PATH = ""
 
 # ---------------------------------------------------------------------------
 # Optional LLM post-processing (OpenAI-compatible chat completions endpoint,
@@ -816,7 +824,32 @@ async def llm_process(payload: dict):
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    """Serve the page, injecting BASE_PATH so the client builds correctly
+    prefixed URLs (WebSocket, /config, /llm, /admin) and loads its own static
+    assets from the right place when deployed under a sub-path."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    if BASE_PATH:
+        html = html.replace("/static/", f"{BASE_PATH}/static/")
+    html = html.replace(
+        "<head>",
+        f'<head>\n  <script>window.__BASE__ = "{BASE_PATH}";</script>',
+        1,
+    )
+    return HTMLResponse(html)
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# When a BASE_PATH is configured, re-home the entire app under that prefix so
+# it can be served from a sub-path behind a reverse proxy. All routes above
+# were registered on `app`; we mount that under BASE_PATH on a fresh parent and
+# rebind `app` (uvicorn imports `server:app` after this module finishes).
+if BASE_PATH:
+    _root = FastAPI(title="Live ASR Proxy (root)")
+    _root.mount(BASE_PATH, app)
+
+    @_root.get("/")
+    async def _redirect_to_base():
+        return RedirectResponse(url=f"{BASE_PATH}/")
+
+    app = _root

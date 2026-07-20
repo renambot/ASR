@@ -58,6 +58,11 @@ export COMMIT_INTERVAL_SEC="0.75"    # only used when ASR_ENDPOINTING="false"; l
 HOST="0.0.0.0"
 PORT="8080"
 
+# Serve the whole app under a base URL path (for deploying behind a reverse
+# proxy at a sub-path, e.g. "/asr"). Empty = serve at the root "/". The proxy
+# must forward the path unchanged (do not strip the prefix).
+export BASE_PATH=""
+
 # ---- TLS (serve page over https; needed for mic access off localhost) -----
 # Set both to a file path to enable; leave "" to serve over http.
 SSL_CERT=""
