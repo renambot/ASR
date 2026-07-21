@@ -356,9 +356,20 @@ async function start() {
       channelCount: 1,
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      // AGC off: it can pump levels and distort the voice characteristics the
+      // diarizer relies on. Some browsers/devices ignore the constraint, so we
+      // also try to turn it off explicitly below.
+      autoGainControl: false,
     },
   });
+
+  // If the device still has AGC on, attempt to disable it (best-effort).
+  const micTrack = mediaStream.getAudioTracks()[0];
+  try {
+    if (micTrack && micTrack.getSettings && micTrack.getSettings().autoGainControl) {
+      await micTrack.applyConstraints({ autoGainControl: false });
+    }
+  } catch { /* not all browsers support toggling AGC after the fact */ }
 
   // Request the target rate directly; the worklet resamples if the browser
   // ignores the hint (e.g. Safari forcing 44.1/48 kHz).

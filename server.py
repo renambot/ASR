@@ -273,29 +273,72 @@ def session_update_event() -> dict:
 
 
 _SPEAKER_KEYS = ("speaker", "speaker_tag", "speaker_id", "speaker_label")
+_WORD_TEXT_KEYS = ("word", "text", "value")
+
+
+def _words(evt: dict) -> list:
+    """The per-word list from a completed event (shape varies by NIM version)."""
+    wi = evt.get("words_info")
+    if isinstance(wi, dict) and wi.get("words"):
+        return wi["words"]
+    return evt.get("words") or []
+
+
+def _word_speaker(w: dict):
+    for k in _SPEAKER_KEYS:
+        v = w.get(k)
+        if v not in (None, "", -1):
+            return str(v)
+    return None
+
+
+def _word_text(w: dict) -> str:
+    for k in _WORD_TEXT_KEYS:
+        v = w.get(k)
+        if isinstance(v, str) and v:
+            return v
+    return ""
 
 
 def _extract_speaker(evt: dict):
-    """Best-effort pull of a speaker label from a completed event. The exact
-    field varies by NIM version, so we probe several likely shapes."""
-    words = []
-    wi = evt.get("words_info")
-    if isinstance(wi, dict):
-        words = wi.get("words") or []
-    words = words or evt.get("words") or []
-    # Prefer the speaker of the first tagged word in the segment.
-    for w in words:
+    """Best-effort pull of a single speaker label from a completed event."""
+    for w in _words(evt):
         if isinstance(w, dict):
-            for k in _SPEAKER_KEYS:
-                v = w.get(k)
-                if v not in (None, "", -1):
-                    return str(v)
-    # Fall back to a segment-level tag.
+            sp = _word_speaker(w)
+            if sp is not None:
+                return sp
     for k in _SPEAKER_KEYS:
         v = evt.get(k)
         if v not in (None, "", -1):
             return str(v)
     return None
+
+
+def _speaker_segments(evt: dict):
+    """Split a completed event into [(speaker|None, text), ...] at per-word
+    speaker changes, so a single utterance spanning two speakers becomes two
+    labeled lines. Falls back to the whole transcript (one speaker) when there
+    are no usable per-word speaker tags — keeping the nicely punctuated text."""
+    transcript = (evt.get("transcript") or "").strip()
+    tagged = []
+    for w in _words(evt):
+        if isinstance(w, dict):
+            wt = _word_text(w)
+            if wt:
+                tagged.append((_word_speaker(w), wt))
+    distinct = {sp for sp, _ in tagged if sp is not None}
+    # No per-word tags, or a single speaker: keep the clean transcript string.
+    if len(distinct) <= 1:
+        only = next(iter(distinct), None) if distinct else _extract_speaker(evt)
+        return [(only, transcript)] if transcript else []
+    # Speaker changes within the utterance: group consecutive words by speaker.
+    groups = []
+    for sp, wt in tagged:
+        if groups and groups[-1][0] == sp:
+            groups[-1][1].append(wt)
+        else:
+            groups.append([sp, [wt]])
+    return [(sp, " ".join(ws).strip()) for sp, ws in groups if " ".join(ws).strip()]
 
 
 async def send_json(ws: WebSocket, payload: dict) -> None:
@@ -528,16 +571,13 @@ class Bridge:
                 if text:
                     await send_json(self.browser, {"type": "interim", "text": text})
             elif etype.endswith("transcription.completed"):
-                # Finalized segment; append it to the running transcript.
-                text = evt.get("transcript", "")
-                if text:
-                    payload = {"type": "final", "text": text}
-                    speaker = None
-                    if DIARIZATION:
-                        log.debug("NIM completed (diarization) full event: %s", json.dumps(evt))
-                        speaker = _extract_speaker(evt)
-                        if speaker is not None:
-                            payload["speaker"] = speaker
+                # Finalized segment. Split it at per-word speaker changes so a
+                # single utterance spanning two speakers becomes two lines.
+                if DIARIZATION:
+                    log.debug("NIM completed (diarization) full event: %s", json.dumps(evt))
+                for speaker, text in _speaker_segments(evt):
+                    if not text:
+                        continue
                     if self._t0 is None:
                         self._t0 = time.monotonic()
                     self.transcript_segments.append({
@@ -545,6 +585,9 @@ class Bridge:
                         "speaker": speaker,
                         "text": text,
                     })
+                    payload = {"type": "final", "text": text}
+                    if speaker is not None:
+                        payload["speaker"] = speaker
                     await send_json(self.browser, payload)
             elif etype == "error":
                 log.warning("NIM error event: %s", json.dumps(evt))

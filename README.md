@@ -104,11 +104,11 @@ the defaults.
 | `SAMPLE_RATE` | `16000` | must match the model |
 | `AUTO_PUNCT` | `true` | automatic punctuation |
 | `ASR_DIARIZATION` | `true` | speaker labels (needs the sortformer model) |
-| `ASR_MAX_SPEAKERS` | `8` | diarization speaker cap |
+| `ASR_MAX_SPEAKERS` | `4` | diarization speaker cap |
 | `ASR_ENDPOINTING` | `false` | `true` = VAD segmentation; `false` = timed commits |
 | `EOU_STOP_HISTORY` / `EOU_STOP_THRESHOLD` | `800` / `0.98` | endpointing: silence to finalize |
 | `EOU_START_HISTORY` / `EOU_START_THRESHOLD` | `300` / `0.2` | endpointing: speech-start detection |
-| `COMMIT_INTERVAL_SEC` | `0.75` | commit cadence when endpointing is off; lower = snappier |
+| `COMMIT_INTERVAL_SEC` | `1.0` | commit cadence when endpointing is off; lower = snappier |
 | `MAX_SESSIONS` | `20` | max simultaneous browser sessions; extra visitors get a "server at capacity" notice (0 = unlimited) |
 | `AUDIO_QUEUE_MAX` | `100` | bounded, drop-oldest audio queue depth (caps latency during a reconnect) |
 | `LLM_BASE_URL` | *(empty)* | OpenAI-compatible endpoint (e.g. vLLM) powering the **AI Summary** button and the background **analyzers**; empty = both features off |

@@ -31,7 +31,7 @@ export ADMIN_TOKEN=""                # protects the Admin tab endpoints ("" = op
 
 # Speaker diarization (label who is speaking). Needs the sortformer model.
 export ASR_DIARIZATION="true"
-export ASR_MAX_SPEAKERS="8"
+export ASR_MAX_SPEAKERS="4"
 
 # ---- LLM post-processing (optional) ----------------------------------------
 # OpenAI-compatible chat completions endpoint (vLLM, Open WebUI, OpenAI, ...).
@@ -52,7 +52,7 @@ export EOU_STOP_HISTORY="800"        # ms of silence before finalizing a segment
 export EOU_STOP_THRESHOLD="0.98"     # fraction of that window that must be silent
 export EOU_START_HISTORY="300"       # ms window to detect speech start
 export EOU_START_THRESHOLD="0.2"
-export COMMIT_INTERVAL_SEC="0.75"    # only used when ASR_ENDPOINTING="false"; lower = snappier
+export COMMIT_INTERVAL_SEC="1.0"    # only used when ASR_ENDPOINTING="false"; lower = snappier
 
 # ---- Web server bind ------------------------------------------------------
 HOST="0.0.0.0"

@@ -34,7 +34,7 @@ services:
 
       # Speaker diarization (needs the sortformer model)
       ASR_DIARIZATION: "true"
-      ASR_MAX_SPEAKERS: "8"
+      ASR_MAX_SPEAKERS: "4"
 
       # ---- Segmentation ---------------------------------------------------
       ASR_ENDPOINTING: "false"             # false = timed commits (reliable)
@@ -42,7 +42,7 @@ services:
       EOU_STOP_THRESHOLD: "0.98"
       EOU_START_HISTORY: "300"
       EOU_START_THRESHOLD: "0.2"
-      COMMIT_INTERVAL_SEC: "0.75"
+      COMMIT_INTERVAL_SEC: "1.0"
 
       # ---- LLM post-processing (optional) ---------------------------------
       # OpenAI-compatible endpoint; empty LLM_BASE_URL disables the feature.
