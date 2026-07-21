@@ -179,6 +179,20 @@
     #admin-reset { width: 100%; font-size: 13px; margin-top: 8px; color: var(--muted); }
     #admin-reset:hover { color: var(--text); }
     #admin-status { font-size: 13px; color: var(--muted); min-height: 16px; margin-top: 8px; }
+
+    /* Extras: per-connection transcription settings */
+    #settings { border: 0; margin: 0 0 6px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    #settings[disabled] { opacity: 0.55; }
+    #settings .set-note { font-size: 12px; color: var(--muted); font-style: italic; }
+    #settings .set-sub { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 6px; }
+    #settings .set-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    #settings .set-row input[type="checkbox"] { flex: 0 0 auto; }
+    #settings .set-row input[type="number"] {
+      width: 64px; margin-left: auto; font: inherit; font-size: 14px; padding: 4px 6px;
+      border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+    }
+    #settings .set-adv summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+    #settings .set-adv .set-row { margin-top: 8px; }
     @media (max-width: 760px) {
       .content { flex-direction: column; }
       aside#speakers {
@@ -297,6 +311,21 @@
       </section>
 
       <section id="tab-extras" class="tab-body" hidden>
+        <fieldset id="settings">
+          <div class="set-note">Transcription settings — apply when you press Start.</div>
+          <label class="set-row"><input type="checkbox" id="set-diarization" /> Label speakers (diarization)</label>
+          <label class="set-row" id="set-maxspeakers-row">Expected speakers
+            <input type="number" id="set-maxspeakers" min="1" max="8" /></label>
+          <label class="set-row"><input type="checkbox" id="set-punct" /> Automatic punctuation</label>
+          <div class="set-sub">Microphone processing</div>
+          <label class="set-row"><input type="checkbox" id="set-ns" /> Noise suppression</label>
+          <label class="set-row"><input type="checkbox" id="set-ec" /> Echo cancellation</label>
+          <label class="set-row"><input type="checkbox" id="set-agc" /> Auto gain</label>
+          <details class="set-adv">
+            <summary>Advanced</summary>
+            <label class="set-row"><input type="checkbox" id="set-endpointing" /> Finalize on natural pauses (may be less reliable)</label>
+          </details>
+        </fieldset>
         <button id="download" title="Full meeting export: title, date, summary, analyses, transcript">Download Markdown</button>
         <button id="download-transcript" title="Raw transcript with timestamps — no summary or analysis">Download transcript only</button>
         <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>

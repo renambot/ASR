@@ -6,7 +6,7 @@ A developer's guide to the EVL ASR web app: how it's built, how the code is
 organized, what the UI does, and how to deploy and configure it. For a quick
 user-facing overview see the top-level [`README.md`](../README.md).
 
-![EVL ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](screenshot.jpg)
+![EVL ASR — live transcript with speaker labels, the Live analysis panel, and the analyzer editor](screenshot.jpg)
 
 ---
 
@@ -139,8 +139,8 @@ basis.
 |---|---|---|
 | `/` | GET | Serves `index.html`, injecting `window.__BASE__` and prefixing static URLs |
 | `/static/*` | GET | Static assets |
-| `/config` | GET | Non-secret client config: `{sample_rate, language, model, llm}` |
-| `/ws` | WS | The audio/transcript bridge |
+| `/config` | GET | Non-secret client config + per-connection ASR **defaults**: `{sample_rate, language, model, llm, llm_model, sessions, diarization, max_speakers, auto_punct, endpointing}` |
+| `/ws` | WS | The audio/transcript bridge. Accepts per-connection ASR overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=` — merged over the env defaults by `session_opts()` for that session only |
 | `/llm` | POST | Run the transcript through the LLM. Body `{text, analyzer?, instruction?}`; `analyzer` (name or id) uses that analyzer's prompt (drives the AI Summary button → "Meeting Summary") |
 | `/analyze` | POST | **Stateless** run of analyzer prompts. Body `{text, analyzers:[{id,name,prompt,mode}]}` → `{results:[{id,name,result|error}]}`. Powers Admin "Run now" / "Run all" so they work outside a live session |
 | `/admin/analyzers` | GET/PUT | Read / replace the analyzer registry (`X-Admin-Token` if `ADMIN_TOKEN` set) |
@@ -245,17 +245,24 @@ All in `static/index.html`; a dark theme defined with CSS variables
   connection status dot.
 - **Main column** — a scrolling **transcript** (grey italic = live hypothesis,
   solid = finalized; `Speaker N:` labels when diarization is on) with the
-  optional **LLM output** panel, and a fixed-height **Analysis panel** pinned at
-  the bottom (scrollable) showing analyzer result cards.
+  optional **LLM output** panel (also where the Meeting Summary appears), and a
+  fixed-height **Live analysis** panel pinned at the bottom (scrollable) showing
+  analyzer result cards.
 - **Side panel (tabs)**
   - **Speakers** — one editable row per speaker; typed names replace
     `Speaker N` everywhere.
-  - **Admin** — the analyzer editor. Each row folds (caret), is drag-reorderable
-    (handle; order affects `chain` and is persisted on Save), and has a **Run**
-    button. Below: **Save**, a blue **Run all now**, and **Reset to server
-    defaults**. Optional admin-token field.
-- **Footer** — elapsed time, word count, the **AI activity** dot, and
-  **Copy** / **Download .md** / **AI Summary** / **Save WAV** / **Clear**.
+  - **Analysis** — the analyzer editor. Each row folds (caret), is
+    drag-reorderable (handle; order affects `chain` and is persisted on Save),
+    and has a **Run** button. Below: **Save**, a blue **Run all now**, and
+    **Reset to server defaults**. Optional admin-token field.
+  - **Extras** — per-session **transcription settings** (diarization, expected
+    speakers, punctuation, mic processing, and an Advanced endpointing toggle;
+    saved in `localStorage`, applied on Start via `/ws` query params), plus
+    **Download .md**, **Download transcript only** (raw timestamped lines), and
+    **Save WAV**.
+- **Footer** — elapsed time, word count, live **session count**, the **AI
+  activity** dot (shows the model), and **Download .md** / **AI Summary** /
+  **Clear**.
 
 ---
 
@@ -339,9 +346,10 @@ location /live-asr/ {
 
 Set `LLM_BASE_URL` (+ `LLM_MODEL`, `LLM_API_KEY`). With no LLM configured the AI
 Summary button hides itself and analyzers don't run. Default analyzer prompts
-live in `analyzers.json`; edit them there, or live in the **Admin** tab. If
-`ADMIN_TOKEN` is set, Admin endpoints require the `X-Admin-Token` header
-(entered in the Admin tab). Because the analyzer set is also cached per-browser
+live in `analyzers.json`; edit them there, or live in the **Analysis** tab. If
+`ADMIN_TOKEN` is set, the `/admin/analyzers` endpoints require the
+`X-Admin-Token` header (entered in the Analysis tab). Because the analyzer set
+is also cached per-browser
 in `localStorage`, use **Reset to server defaults** to adopt newly shipped
 defaults.
 

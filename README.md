@@ -134,23 +134,43 @@ set `SSL_CERT` and `SSL_KEY` in `GO` and it passes them to uvicorn.
 3. Grey italic text is the live hypothesis; it becomes solid when the segment is
    finalized and appended. With diarization on, a new line labeled `Speaker N:`
    starts whenever the speaker changes.
-4. **Copy** or **Download .md** any time. The Markdown export is ordered:
-   title + date → AI summary → analyses → full transcript. The session runs
-   until you press **Stop**.
-5. **Save WAV** downloads exactly what was captured (debugging).
+4. **Download .md** (footer or Extras) any time — the Markdown export is
+   ordered title + date → AI summary → analyses → full transcript. The session
+   runs until you press **Stop**.
+5. The **Extras tab** also has **Download transcript only** (raw, timestamped
+   `[MM:SS]` lines, no summary/analysis) and **Save WAV** (exactly what was
+   captured, for debugging).
 
-### Side panel and analyzers (when an LLM is configured)
+### Side panel
 
 - **Speakers tab** — rename each `Speaker N`; names replace the label
   everywhere, including exports and the analyzers.
-- **Analysis panel** (bottom of the transcript) — shows results from the
-  background **analyzers** that run on a schedule during the meeting.
-- **Admin tab** — edit the analyzer prompts and schedules (fold/reorder rows;
+- **Analysis tab** — edit the analyzer prompts and schedules (fold/reorder rows;
   order matters for chaining). **Run** one or **Run all now** on demand (works
   during, paused, or after recording), **Save** to persist (also cached in this
-  browser), or **Reset to server defaults**.
+  browser), or **Reset to server defaults**. *(Needs an LLM configured.)*
+- **Extras tab** — per-session **transcription settings** (see below), plus the
+  downloads and Save WAV.
+- **Live analysis panel** (bottom of the transcript) — shows the background
+  analyzer results as they run.
 - **AI Summary** button (footer) — runs the "Meeting Summary" analyzer over the
-  transcript on demand. The footer's **AI** dot turns purple while any AI runs.
+  transcript on demand; the result appears in the main view. The footer's
+  **AI** dot turns purple while any AI runs.
+
+### Per-session settings (Extras tab)
+
+Each connection can override the server defaults for that session (they apply
+when you press **Start**, are saved in your browser, and don't affect other
+users):
+
+- **Label speakers (diarization)** and **Expected speakers** (1–8)
+- **Automatic punctuation**
+- **Microphone processing** — noise suppression, echo cancellation, auto gain
+- **Advanced → Finalize on natural pauses** (endpointing)
+
+The server-side env vars (`ASR_DIARIZATION`, `ASR_MAX_SPEAKERS`, `AUTO_PUNCT`,
+`ASR_ENDPOINTING`) are the **defaults**; these controls override them
+per-connection.
 
 ## Deploying behind nginx
 

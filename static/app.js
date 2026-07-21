@@ -55,6 +55,16 @@ const els = {
   adminStatus: document.getElementById("admin-status"),
   adminAuth: document.getElementById("admin-auth"),
   adminToken: document.getElementById("admin-token"),
+  // Extras: per-connection transcription settings
+  settings: document.getElementById("settings"),
+  setDiarization: document.getElementById("set-diarization"),
+  setMaxspeakers: document.getElementById("set-maxspeakers"),
+  setMaxspeakersRow: document.getElementById("set-maxspeakers-row"),
+  setPunct: document.getElementById("set-punct"),
+  setNs: document.getElementById("set-ns"),
+  setEc: document.getElementById("set-ec"),
+  setAgc: document.getElementById("set-agc"),
+  setEndpointing: document.getElementById("set-endpointing"),
 };
 
 // Show/hide the banner used for capacity and similar user-facing messages.
@@ -83,6 +93,46 @@ let startTime = 0;
 let elapsedTimer = null;
 let wantReconnect = false; // auto-reconnect the browser<->proxy socket while running
 let sessionEndResolve = null; // resolves when the server sends session_end after stop
+
+// --- Per-connection transcription settings (Extras tab) ---
+// Defaults match the server env defaults / current capture constraints; the
+// server's actual defaults are seeded from /config on first load. Choices are
+// saved per browser and applied when a session starts (query params on /ws for
+// ASR options; getUserMedia constraints for mic processing).
+const SETTINGS_KEY = "asr.settings.v1";
+const settings = {
+  diarization: true, maxSpeakers: 4, autoPunct: true, endpointing: false,
+  noiseSuppression: true, echoCancellation: true, autoGain: false,
+};
+const hadSavedSettings = !!localStorage.getItem(SETTINGS_KEY);
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null") || {}); } catch {}
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+}
+function applySettingsToUI() {
+  els.setDiarization.checked = settings.diarization;
+  els.setMaxspeakers.value = settings.maxSpeakers;
+  els.setPunct.checked = settings.autoPunct;
+  els.setEndpointing.checked = settings.endpointing;
+  els.setNs.checked = settings.noiseSuppression;
+  els.setEc.checked = settings.echoCancellation;
+  els.setAgc.checked = settings.autoGain;
+  els.setMaxspeakersRow.style.display = settings.diarization ? "" : "none";
+}
+function readSettingsFromUI() {
+  settings.diarization = els.setDiarization.checked;
+  settings.maxSpeakers = Math.max(1, Math.min(8, parseInt(els.setMaxspeakers.value, 10) || 4));
+  settings.autoPunct = els.setPunct.checked;
+  settings.endpointing = els.setEndpointing.checked;
+  settings.noiseSuppression = els.setNs.checked;
+  settings.echoCancellation = els.setEc.checked;
+  settings.autoGain = els.setAgc.checked;
+  els.setMaxspeakersRow.style.display = settings.diarization ? "" : "none";
+  saveSettings();
+}
+applySettingsToUI();
+els.settings.addEventListener("change", readSettingsFromUI);
 
 // --- Speaker naming (diarization) ---
 // Custom names entered in the side panel, keyed by the raw speaker id the NIM
@@ -272,8 +322,15 @@ function fmtElapsed(ms) {
 // Open (or reopen) the socket to the proxy and wire up event handlers.
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const wsurl = `${proto}://${location.host}${BASE}/ws`;
-console.log('WS : ', wsurl);
+  // Per-connection ASR settings ride along as query params; the server merges
+  // them over its env defaults for this session only.
+  const params = new URLSearchParams({
+    diarization: settings.diarization ? "1" : "0",
+    max_speakers: String(settings.maxSpeakers),
+    punct: settings.autoPunct ? "1" : "0",
+    endpointing: settings.endpointing ? "1" : "0",
+  });
+  const wsurl = `${proto}://${location.host}${BASE}/ws?${params.toString()}`;
   ws = new WebSocket(wsurl);
   ws.binaryType = "arraybuffer";
 
@@ -355,20 +412,20 @@ async function start() {
     audio: {
       deviceId: deviceId ? { exact: deviceId } : undefined,
       channelCount: 1,
-      echoCancellation: true,
-      noiseSuppression: true,
-      // AGC off: it can pump levels and distort the voice characteristics the
-      // diarizer relies on. Some browsers/devices ignore the constraint, so we
-      // also try to turn it off explicitly below.
-      autoGainControl: false,
+      // Mic processing per the Extras settings (AGC off by default: it pumps
+      // levels and distorts the voice cues the diarizer relies on).
+      echoCancellation: settings.echoCancellation,
+      noiseSuppression: settings.noiseSuppression,
+      autoGainControl: settings.autoGain,
     },
   });
 
-  // If the device still has AGC on, attempt to disable it (best-effort).
+  // Some browsers/devices ignore the constraint; re-assert it best-effort.
   const micTrack = mediaStream.getAudioTracks()[0];
   try {
-    if (micTrack && micTrack.getSettings && micTrack.getSettings().autoGainControl) {
-      await micTrack.applyConstraints({ autoGainControl: false });
+    if (micTrack && micTrack.getSettings
+        && micTrack.getSettings().autoGainControl !== settings.autoGain) {
+      await micTrack.applyConstraints({ autoGainControl: settings.autoGain });
     }
   } catch { /* not all browsers support toggling AGC after the fact */ }
 
@@ -411,6 +468,7 @@ async function start() {
   els.pause.textContent = "Pause";
   els.pause.disabled = false;
   els.mic.disabled = true;
+  els.settings.disabled = true; // settings apply per session; lock during one
   startTime = Date.now() - 0;
   if (!elapsedTimer) {
     elapsedTimer = setInterval(() => {
@@ -429,6 +487,7 @@ async function stop() {
   els.pause.textContent = "Pause";
   els.pause.disabled = true;
   els.mic.disabled = false;
+  els.settings.disabled = false;
 
   // Stop capturing first so no new audio is queued.
   if (workletNode) { workletNode.port.onmessage = null; workletNode.disconnect(); workletNode = null; }
@@ -670,6 +729,15 @@ fetch(`config`)
     if (cfg.llm) els.llm.hidden = false;
     if (cfg.llm_model) { aiModel = cfg.llm_model; updateAiIndicator(); }
     updateSessions(cfg);
+    // First-time users (no saved settings): seed the ASR options from the
+    // server's configured defaults so the Extras UI reflects reality.
+    if (!hadSavedSettings) {
+      if (typeof cfg.diarization === "boolean") settings.diarization = cfg.diarization;
+      if (typeof cfg.max_speakers === "number") settings.maxSpeakers = cfg.max_speakers;
+      if (typeof cfg.auto_punct === "boolean") settings.autoPunct = cfg.auto_punct;
+      if (typeof cfg.endpointing === "boolean") settings.endpointing = cfg.endpointing;
+      applySettingsToUI();
+    }
   })
   .catch(() => {});
 setInterval(() => {

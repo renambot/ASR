@@ -234,9 +234,36 @@ def nim_url() -> str:
     return f"{NIM_SCHEME}://{NIM_HOST}:{NIM_PORT}{NIM_PATH}?{urlencode(query)}"
 
 
-def session_update_event() -> dict:
+def _bool_param(qp, key, default: bool) -> bool:
+    v = qp.get(key)
+    if v is None:
+        return default
+    return str(v).lower() in ("1", "true", "yes", "on")
+
+
+def session_opts(qp) -> dict:
+    """Per-connection ASR settings: query-param overrides from the browser
+    merged over the server env defaults, validated/clamped. `qp` is the
+    WebSocket query params (Starlette QueryParams / dict-like)."""
+    max_sp = MAX_SPEAKERS
+    raw = qp.get("max_speakers")
+    if raw is not None:
+        try:
+            max_sp = int(float(raw))
+        except (TypeError, ValueError):
+            pass
+    return {
+        "diarization": _bool_param(qp, "diarization", DIARIZATION),
+        "max_speakers": max(1, min(8, max_sp)),
+        "auto_punct": _bool_param(qp, "punct", AUTO_PUNCT),
+        "endpointing": _bool_param(qp, "endpointing", ENDPOINTING),
+    }
+
+
+def session_update_event(opts: dict) -> dict:
     """The first event we send after connecting: configures the transcription
-    session (model, language, punctuation, and optional diarization/endpointing)."""
+    session. `opts` (from session_opts) carries the per-connection settings;
+    model/language/sample-rate and endpointing thresholds stay server-side."""
     session = {
         "input_audio_format": "pcm16",
         "input_audio_transcription": {
@@ -248,19 +275,19 @@ def session_update_event() -> dict:
         },
         "recognition_config": {
             "max_alternatives": 1,
-            "enable_automatic_punctuation": AUTO_PUNCT,
-            "enable_word_time_offsets": DIARIZATION,
+            "enable_automatic_punctuation": opts["auto_punct"],
+            "enable_word_time_offsets": opts["diarization"],
             "enable_profanity_filter": False,
         },
     }
     if ASR_MODEL:
         session["input_audio_transcription"]["model"] = ASR_MODEL
-    if DIARIZATION:
+    if opts["diarization"]:
         session["speaker_diarization"] = {
             "enable_speaker_diarization": True,
-            "max_speaker_count": MAX_SPEAKERS,
+            "max_speaker_count": opts["max_speakers"],
         }
-    if ENDPOINTING:
+    if opts["endpointing"]:
         session["endpointing_config"] = {
             "start_history": EOU_START_HISTORY,
             "start_threshold": EOU_START_THRESHOLD,
@@ -357,6 +384,9 @@ class Bridge:
 
     def __init__(self, browser_ws: WebSocket):
         self.browser = browser_ws
+        # Per-connection ASR settings from the browser's ?query params (merged
+        # over the server env defaults), fixed for the life of this session.
+        self.opts = session_opts(browser_ws.query_params)
         # Decouples the browser reader from the NIM writer: audio keeps being
         # read from the browser even while the NIM is momentarily reconnecting.
         self.audio_q: asyncio.Queue[bytes] = asyncio.Queue(maxsize=AUDIO_QUEUE_MAX)
@@ -462,7 +492,7 @@ class Bridge:
                     ping_interval=20,
                     ping_timeout=20,
                 ) as nim:
-                    await nim.send(json.dumps(session_update_event()))
+                    await nim.send(json.dumps(session_update_event(self.opts)))
                     log.info("NIM session opened: %s", url)
                     await send_json(self.browser, {"type": "status", "state": "connected"})
                     backoff = 0.5
@@ -473,7 +503,7 @@ class Bridge:
                     }
                     # With server-side endpointing on, the NIM segments itself,
                     # so we must NOT also force periodic commits.
-                    if COMMIT_INTERVAL > 0 and not ENDPOINTING:
+                    if COMMIT_INTERVAL > 0 and not self.opts["endpointing"]:
                         tasks.add(asyncio.create_task(self._commit_loop(nim)))
                     done, pending = await asyncio.wait(
                         tasks, return_when=asyncio.FIRST_COMPLETED
@@ -573,7 +603,7 @@ class Bridge:
             elif etype.endswith("transcription.completed"):
                 # Finalized segment. Split it at per-word speaker changes so a
                 # single utterance spanning two speakers becomes two lines.
-                if DIARIZATION:
+                if self.opts["diarization"]:
                     log.debug("NIM completed (diarization) full event: %s", json.dumps(evt))
                 for speaker, text in _speaker_segments(evt):
                     if not text:
@@ -794,6 +824,11 @@ async def config():
         "llm": bool(LLM_BASE_URL),
         "llm_model": LLM_MODEL,         # model the analyzers / AI Summary use ("" = endpoint default)
         "sessions": _active_sessions,   # live browser sessions the server is handling
+        # Per-connection ASR defaults (the client can override these per session).
+        "diarization": DIARIZATION,
+        "max_speakers": MAX_SPEAKERS,
+        "auto_punct": AUTO_PUNCT,
+        "endpointing": ENDPOINTING,
     }
 
 
