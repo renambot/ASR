@@ -37,7 +37,7 @@ services:
       ASR_MAX_SPEAKERS: "4"
 
       # ---- Segmentation ---------------------------------------------------
-      ASR_ENDPOINTING: "false"             # false = timed commits (reliable)
+      ASR_ENDPOINTING: "true"             # true = VAD segmentation; false = timed commits
       EOU_STOP_HISTORY: "800"
       EOU_STOP_THRESHOLD: "0.98"
       EOU_START_HISTORY: "300"

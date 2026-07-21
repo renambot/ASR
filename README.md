@@ -105,7 +105,7 @@ the defaults.
 | `AUTO_PUNCT` | `true` | automatic punctuation |
 | `ASR_DIARIZATION` | `true` | speaker labels (needs the sortformer model) |
 | `ASR_MAX_SPEAKERS` | `4` | diarization speaker cap |
-| `ASR_ENDPOINTING` | `false` | `true` = VAD segmentation; `false` = timed commits |
+| `ASR_ENDPOINTING` | `true` | `true` = VAD segmentation; `false` = timed commits |
 | `EOU_STOP_HISTORY` / `EOU_STOP_THRESHOLD` | `800` / `0.98` | endpointing: silence to finalize |
 | `EOU_START_HISTORY` / `EOU_START_THRESHOLD` | `300` / `0.2` | endpointing: speech-start detection |
 | `COMMIT_INTERVAL_SEC` | `1.0` | commit cadence when endpointing is off; lower = snappier |

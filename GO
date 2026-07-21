@@ -47,7 +47,7 @@ export LLM_TIMEOUT_SEC="120"
 # ---- Segmentation --------------------------------------------------------
 # Endpointing ON = the NIM finalizes on natural speech pauses (recommended).
 # Endpointing OFF = fall back to committing the buffer every COMMIT_INTERVAL_SEC.
-export ASR_ENDPOINTING="false"
+export ASR_ENDPOINTING="true"
 export EOU_STOP_HISTORY="800"        # ms of silence before finalizing a segment
 export EOU_STOP_THRESHOLD="0.98"     # fraction of that window that must be silent
 export EOU_START_HISTORY="300"       # ms window to detect speech start
