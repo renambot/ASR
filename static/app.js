@@ -27,6 +27,8 @@ const els = {
   elapsed: document.getElementById("elapsed"),
   words: document.getElementById("words"),
   aiActivity: document.getElementById("ai-activity"),
+  aiLabel: document.getElementById("ai-label"),
+  sessions: document.getElementById("sessions"),
   meetingTitle: document.getElementById("meeting-title"),
   copy: document.getElementById("copy"),
   download: document.getElementById("download"),
@@ -580,9 +582,14 @@ els.savewav.onclick = () => {
 // reported over the WebSocket ({type:"ai_running"}).
 let aiClientCount = 0;   // in-flight client LLM requests
 let aiServerRunning = false; // server analyzer currently running
+let aiModel = "";        // LLM model the analyzers / AI Summary use
 function updateAiIndicator() {
-  els.aiActivity.classList.toggle("running", aiClientCount > 0 || aiServerRunning);
-  els.aiActivity.title = els.aiActivity.classList.contains("running") ? "AI running…" : "AI idle";
+  const running = aiClientCount > 0 || aiServerRunning;
+  els.aiActivity.classList.toggle("running", running);
+  els.aiLabel.textContent = aiModel || "AI";
+  els.aiActivity.title = aiModel
+    ? `AI model: ${aiModel} — ${running ? "running…" : "idle"}`
+    : (running ? "AI running…" : "AI idle");
 }
 
 // ---- LLM post-processing ---------------------------------------------------
@@ -611,6 +618,7 @@ els.llm.onclick = async () => {
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
     els.llmResult.textContent = data.result;
+    if (data.model) aiModel = data.model; // reflect the actual model in the footer
     const title = data.analyzer || "LLM output";
     els.llmTitle.textContent = data.model ? `${title} — ${data.model}` : title;
     els.llmPanel.hidden = false;
@@ -634,11 +642,25 @@ els.llmCopy.onclick = async () => {
 
 els.llmClose.onclick = () => { els.llmPanel.hidden = true; };
 
-// Show the AI Summary button only if the server has an LLM configured.
+// Footer indicator of live sessions the server is currently handling.
+function updateSessions(cfg) {
+  const n = cfg && typeof cfg.sessions === "number" ? cfg.sessions : null;
+  els.sessions.textContent = n === null ? "— sessions" : `${n} session${n === 1 ? "" : "s"}`;
+}
+
+// One /config fetch shows the AI Summary button and seeds the session count;
+// then poll the count periodically (it changes slowly).
 fetch(`config`)
   .then((r) => r.json())
-  .then((cfg) => { if (cfg.llm) els.llm.hidden = false; })
+  .then((cfg) => {
+    if (cfg.llm) els.llm.hidden = false;
+    if (cfg.llm_model) { aiModel = cfg.llm_model; updateAiIndicator(); }
+    updateSessions(cfg);
+  })
   .catch(() => {});
+setInterval(() => {
+  fetch(`config`).then((r) => r.json()).then(updateSessions).catch(() => {});
+}, 5000);
 
 // ---- Side panel tabs -------------------------------------------------------
 document.querySelectorAll(".tabs .tab").forEach((btn) => {

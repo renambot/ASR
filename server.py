@@ -749,6 +749,8 @@ async def config():
         "language": ASR_LANGUAGE,
         "model": ASR_MODEL or "default",
         "llm": bool(LLM_BASE_URL),
+        "llm_model": LLM_MODEL,         # model the analyzers / AI Summary use ("" = endpoint default)
+        "sessions": _active_sessions,   # live browser sessions the server is handling
     }
 
 
