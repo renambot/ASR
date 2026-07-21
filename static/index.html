@@ -264,21 +264,22 @@
         </div>
       </div>
       <section id="analysis-panel">
-        <div class="analysis-panel-head">Analysis</div>
+        <div class="analysis-panel-head">Live analysis</div>
         <div id="analysis-list"></div>
-        <div id="analysis-empty">Analyzer results appear here during a session. Configure the prompts in the Admin tab.</div>
+        <div id="analysis-empty">Analyzer results appear here during a session. Configure the prompts in the Analysis tab.</div>
       </section>
     </main>
 
     <aside id="speakers">
       <div class="tabs">
         <button class="tab active" data-tab="speakers">Speakers</button>
-        <button class="tab" data-tab="admin">Admin</button>
+        <button class="tab" data-tab="admin">Analysis</button>
+        <button class="tab" data-tab="extras">Extras</button>
       </div>
 
       <section id="tab-speakers" class="tab-body">
         <div id="speaker-list"></div>
-        <div id="speakers-empty">No speakers detected yet. Names you enter here replace “Speaker N” in the transcript and in Copy / Download.</div>
+        <div id="speakers-empty">No speakers detected yet. Names you enter here replace “Speaker N” in the transcript and the Markdown export.</div>
       </section>
 
       <section id="tab-admin" class="tab-body" hidden>
@@ -294,6 +295,10 @@
         <button id="admin-reset" title="Discard this browser's saved set and reload the server's default analyzers">Reset to server defaults</button>
         <div id="admin-status"></div>
       </section>
+
+      <section id="tab-extras" class="tab-body" hidden>
+        <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>
+      </section>
     </aside>
   </div>
 
@@ -303,10 +308,8 @@
     <span id="sessions" title="Live sessions the server is currently processing">— sessions</span>
     <span id="ai-activity" title="AI idle"><span class="ai-dot"></span> <span id="ai-label">AI</span></span>
     <span class="spacer"></span>
-    <button id="copy">Copy</button>
     <button id="download">Download .md</button>
     <button id="llm" hidden title="Send the transcript to the configured LLM">AI Summary</button>
-    <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>
     <button id="clear">Clear</button>
   </footer>
 

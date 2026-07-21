@@ -31,7 +31,6 @@ const els = {
   aiLabel: document.getElementById("ai-label"),
   sessions: document.getElementById("sessions"),
   meetingTitle: document.getElementById("meeting-title"),
-  copy: document.getElementById("copy"),
   download: document.getElementById("download"),
   savewav: document.getElementById("savewav"),
   clear: document.getElementById("clear"),
@@ -464,18 +463,6 @@ function fullText() {
   return composeText();
 }
 
-// Text as exported (Copy / Download): the transcript body prefixed with the
-// meeting title (if any) and the date. fullText() stays body-only so the LLM
-// input and the "clear?" content check aren't affected by the header.
-function exportText() {
-  const title = els.meetingTitle.value.trim();
-  const date = new Date().toLocaleDateString(undefined, {
-    year: "numeric", month: "long", day: "numeric",
-  });
-  const header = (title ? `${title}\n` : "") + date;
-  return `${header}\n\n${fullText()}`;
-}
-
 // ---- Markdown export (Download) -------------------------------------------
 // A Markdown document, in order: title + date, then the AI summary, then all
 // analyses, then the full transcript. Sections with no content are omitted.
@@ -519,11 +506,6 @@ function exportMarkdown() {
     .join("\n\n");
 }
 
-els.copy.onclick = async () => {
-  try { await navigator.clipboard.writeText(exportText()); els.copy.textContent = "Copied!"; }
-  catch { els.copy.textContent = "Copy failed"; }
-  setTimeout(() => (els.copy.textContent = "Copy"), 1500);
-};
 
 els.download.onclick = () => {
   const blob = new Blob([exportMarkdown() + "\n"], { type: "text/markdown" });
