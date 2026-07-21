@@ -161,6 +161,35 @@ that prefix on a parent app, and `/` redirects there. The index route injects
 static asset paths. Empty `BASE_PATH` serves at the root. The reverse proxy must
 forward the path unchanged (do not strip the prefix).
 
+### Security: what's exposed to the client
+
+Secrets stay **server-side** by design — the proxy exists precisely so the NIM
+address and any API keys never reach the browser. Credentials are only ever used
+as outbound bearer headers or for comparison; they are never serialized into any
+response.
+
+| Secret | Only used for | Sent to browser? |
+|---|---|---|
+| `NIM_API_KEY` | `Authorization` header on the server→NIM connection | No |
+| `LLM_API_KEY` | `Authorization` header on the server→LLM call | No |
+| `ADMIN_TOKEN` | comparing the `X-Admin-Token` header; exposed only as `bool` → `auth_required` | No — only its presence |
+| `LLM_BASE_URL` | the server→LLM request URL; exposed only as `bool` → `llm` | No — only its presence |
+| `NIM_HOST` / NIM URL | building the NIM WebSocket URL | No — the browser talks to the same-origin `/ws` |
+
+The public `GET /config` returns only non-secret fields the client needs:
+
+```json
+{ "sample_rate", "language", "model", "llm": <bool>, "llm_model", "sessions" }
+```
+
+**Information disclosure to note:** `/config` is unauthenticated, so any visitor
+who can load the page can see the **model names** (`model` = ASR model,
+`llm_model` = the analyzer/AI-Summary model), the language, the sample rate, and
+the current **session count**. None are credentials — fine for an internal tool
+— but if the model name is sensitive, gate `llm_model` behind the admin token or
+omit it from `/config`. The `/admin/analyzers` endpoints (which return the
+prompt text) are protected by `ADMIN_TOKEN` when it is set.
+
 ---
 
 ## 4. Front end (`static/`)
