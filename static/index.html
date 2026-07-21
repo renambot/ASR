@@ -202,6 +202,15 @@
     }
     #ai-activity.running { color: var(--ai); }
     #ai-activity.running .ai-dot { box-shadow: 0 0 8px var(--ai); animation: pulse 1s infinite; }
+    /* Portrait/narrow: wrap the footer so action buttons don't run off-screen.
+       (Placed after the base footer rules above so these win — media queries
+       don't add specificity.) Stats on line 1, then buttons stretch across
+       their own rows. */
+    @media (max-width: 760px) {
+      footer { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+      footer .spacer { flex-basis: 100%; height: 0; margin: 0; }
+      footer button { flex: 1 1 auto; }
+    }
     .placeholder { color: var(--muted); font-style: italic; }
     #notice {
       background: var(--notice-bg); color: var(--notice-fg); border-bottom: 1px solid var(--danger);
