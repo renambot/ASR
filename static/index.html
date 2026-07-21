@@ -297,8 +297,8 @@
       </section>
 
       <section id="tab-extras" class="tab-body" hidden>
-        <button id="download" title="Full meeting export: title, date, summary, analyses, transcript">Download .md</button>
-        <button id="download-transcript" title="Raw transcript with timestamps — no summary or analysis">Download transcript</button>
+        <button id="download" title="Full meeting export: title, date, summary, analyses, transcript">Download Markdown</button>
+        <button id="download-transcript" title="Raw transcript with timestamps — no summary or analysis">Download transcript only</button>
         <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>
       </section>
     </aside>
@@ -310,6 +310,7 @@
     <span id="sessions" title="Live sessions the server is currently processing">— sessions</span>
     <span id="ai-activity" title="AI idle"><span class="ai-dot"></span> <span id="ai-label">AI</span></span>
     <span class="spacer"></span>
+    <button id="download-footer" title="Full meeting export: title, date, summary, analyses, transcript">Download .md</button>
     <button id="llm" hidden title="Send the transcript to the configured LLM">AI Summary</button>
     <button id="clear">Clear</button>
   </footer>

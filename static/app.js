@@ -32,6 +32,7 @@ const els = {
   sessions: document.getElementById("sessions"),
   meetingTitle: document.getElementById("meeting-title"),
   download: document.getElementById("download"),
+  downloadFooter: document.getElementById("download-footer"),
   downloadTranscript: document.getElementById("download-transcript"),
   savewav: document.getElementById("savewav"),
   clear: document.getElementById("clear"),
@@ -533,7 +534,9 @@ function saveTextFile(text, suffix, ext, mime) {
   URL.revokeObjectURL(a.href);
 }
 
-els.download.onclick = () => saveTextFile(exportMarkdown(), "meeting", "md", "text/markdown");
+function downloadMarkdown() { saveTextFile(exportMarkdown(), "meeting", "md", "text/markdown"); }
+els.download.onclick = downloadMarkdown;          // Extras tab
+els.downloadFooter.onclick = downloadMarkdown;    // footer copy (same action)
 els.downloadTranscript.onclick = () => saveTextFile(transcriptText(), "transcript", "txt", "text/plain");
 
 // ---- Debug: encode captured PCM16 frames into a WAV and download ----------
