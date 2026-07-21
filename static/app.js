@@ -687,7 +687,28 @@ document.querySelectorAll(".tabs .tab").forEach((btn) => {
 // The server runs the analyzer prompts in the background during a session and
 // pushes {type:"analysis", id, name, result|error, ts} messages. One card per
 // analyzer id, updated in place.
+// The "Meeting Summary" analyzer (the end-of-meeting summary) is shown in the
+// main transcript view (the LLM panel) rather than as a bottom Analysis card.
+function isMeetingSummary(msg) {
+  return (msg.name || "").trim().toLowerCase() === "meeting summary"
+    || msg.id === "final-summary";
+}
+
+function showSummaryInMain(text) {
+  els.llmResult.textContent = text;
+  els.llmTitle.textContent = aiModel ? `Meeting Summary — ${aiModel}` : "Meeting Summary";
+  els.llmPanel.hidden = false;
+  els.llmPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 function renderAnalysis(msg) {
+  if (isMeetingSummary(msg) && !msg.error && msg.result) {
+    // Surface it in the main view; drop any stale bottom card for it.
+    const stale = els.analysisList.querySelector(`[data-analyzer="${CSS.escape(msg.id)}"]`);
+    if (stale) stale.remove();
+    showSummaryInMain(msg.result);
+    return;
+  }
   els.analysisEmpty.style.display = "none";
   let card = els.analysisList.querySelector(`[data-analyzer="${CSS.escape(msg.id)}"]`);
   if (!card) {
