@@ -32,6 +32,7 @@ const els = {
   sessions: document.getElementById("sessions"),
   meetingTitle: document.getElementById("meeting-title"),
   download: document.getElementById("download"),
+  downloadTranscript: document.getElementById("download-transcript"),
   savewav: document.getElementById("savewav"),
   clear: document.getElementById("clear"),
   speakerList: document.getElementById("speaker-list"),
@@ -507,17 +508,33 @@ function exportMarkdown() {
 }
 
 
-els.download.onclick = () => {
-  const blob = new Blob([exportMarkdown() + "\n"], { type: "text/markdown" });
+// Raw transcript for the "Download transcript" button: timestamped lines with
+// speaker names, and nothing else (no title header beyond date, no summary,
+// no analysis). The .md export groups by speaker and has no per-line times.
+function transcriptText() {
+  const title = els.meetingTitle.value.trim();
+  const date = new Date().toLocaleDateString(undefined, {
+    year: "numeric", month: "long", day: "numeric",
+  });
+  const header = (title ? `${title}\n` : "") + date;
+  return `${header}\n\n${analyzerTranscript()}`.trim();
+}
+
+// Trigger a client-side file download of `text`.
+function saveTextFile(text, suffix, ext, mime) {
+  const blob = new Blob([text + "\n"], { type: mime });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const slug = els.meetingTitle.value.trim()
     .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  a.download = `${slug ? slug + "-" : "transcript-"}${ts}.md`;
+  a.download = `${slug ? slug + "-" : ""}${suffix}-${ts}.${ext}`;
   a.click();
   URL.revokeObjectURL(a.href);
-};
+}
+
+els.download.onclick = () => saveTextFile(exportMarkdown(), "meeting", "md", "text/markdown");
+els.downloadTranscript.onclick = () => saveTextFile(transcriptText(), "transcript", "txt", "text/plain");
 
 // ---- Debug: encode captured PCM16 frames into a WAV and download ----------
 function debugBytes() {
