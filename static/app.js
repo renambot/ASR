@@ -1098,7 +1098,7 @@ els.adminReset.onclick = async () => {
 };
 
 els.clear.onclick = () => {
-  if (!fullText() || confirm("Clear the transcript?")) {
+  if (!fullText() || confirm("Clear the transcript, analysis, and captured audio?")) {
     finalSegments = [];
     interimText = "";
     // Reset the speaker panel; keep speakerNames so returning speaker ids
@@ -1107,6 +1107,13 @@ els.clear.onclick = () => {
     els.speakerList.textContent = "";
     els.speakersEmpty.style.display = "";
     renderTranscript();
+    // Clear the Analysis panel + the AI Summary / LLM output in the main view.
+    els.analysisList.textContent = "";
+    els.analysisEmpty.style.display = "";
+    els.llmPanel.hidden = true;
+    els.llmResult.textContent = "";
+    // Drop the captured audio so Save WAV won't include the old session.
+    debugChunks = [];
   }
 };
 
