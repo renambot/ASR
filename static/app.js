@@ -22,6 +22,7 @@ const els = {
   pause: document.getElementById("pause"),
   dot: document.getElementById("dot"),
   state: document.getElementById("state"),
+  themeToggle: document.getElementById("theme-toggle"),
   transcript: document.getElementById("transcript"),
   interim: document.getElementById("interim"),
   elapsed: document.getElementById("elapsed"),
@@ -1114,6 +1115,35 @@ els.pause.onclick = () => {
 };
 
 els.refresh.onclick = () => ensurePermissionThenList();
+
+// ---- Light / dark theme -----------------------------------------------------
+// Defaults to the OS preference; a manual choice is stored and wins. The head
+// applies a saved choice before paint; here we keep the toggle button in sync.
+const THEME_KEY = "asr.theme";
+function effectiveTheme() {
+  const forced = document.documentElement.getAttribute("data-theme");
+  if (forced === "light" || forced === "dark") return forced;
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches
+    ? "light" : "dark";
+}
+function syncThemeButton() {
+  const light = effectiveTheme() === "light";
+  els.themeToggle.textContent = light ? "🌙" : "☀️";
+  els.themeToggle.title = light ? "Switch to dark mode" : "Switch to light mode";
+}
+els.themeToggle.onclick = () => {
+  const next = effectiveTheme() === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem(THEME_KEY, next); } catch {}
+  syncThemeButton();
+};
+// Follow OS changes while no manual choice is stored.
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => {
+    if (!localStorage.getItem(THEME_KEY)) syncThemeButton();
+  });
+}
+syncThemeButton();
 
 // --- Bootstrap on page load ---
 // Populate device list on load (labels appear after permission is granted).

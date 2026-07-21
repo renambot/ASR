@@ -5,11 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>EVL ASR — NVIDIA NIM Speech-to-Text</title>
   <link rel="icon" type="image/png" href="static/favicon.png" />
+  <!-- Apply a saved light/dark choice before first paint (avoids a flash). -->
+  <script>try{var t=localStorage.getItem("asr.theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
   <style>
     :root {
+      color-scheme: dark;
       --bg: #0f1115; --panel: #171a21; --border: #262b36;
       --text: #e6e9ef; --muted: #8b93a3; --accent: #76b900; /* NVIDIA green */
       --interim: #b9c0cd; --danger: #ff5c5c; --ai: #a970ff; /* AI activity */
+      --notice-bg: #3a1d1d; --notice-fg: #ffb4b4;
+    }
+    /* Light theme — auto from the OS unless toggled, or forced via data-theme. */
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) {
+        color-scheme: light;
+        --bg: #eef1f5; --panel: #ffffff; --border: #d6dbe3;
+        --text: #1a1d24; --muted: #5b6472; --interim: #6b7280;
+        --danger: #c92a2a; --ai: #7c3aed;
+        --notice-bg: #fdecec; --notice-fg: #a12020;
+      }
+    }
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --bg: #eef1f5; --panel: #ffffff; --border: #d6dbe3;
+      --text: #1a1d24; --muted: #5b6472; --interim: #6b7280;
+      --danger: #c92a2a; --ai: #7c3aed;
+      --notice-bg: #fdecec; --notice-fg: #a12020;
     }
     * { box-sizing: border-box; }
     body {
@@ -183,7 +204,7 @@
     #ai-activity.running .ai-dot { box-shadow: 0 0 8px var(--ai); animation: pulse 1s infinite; }
     .placeholder { color: var(--muted); font-style: italic; }
     #notice {
-      background: #3a1d1d; color: #ffb4b4; border-bottom: 1px solid var(--danger);
+      background: var(--notice-bg); color: var(--notice-fg); border-bottom: 1px solid var(--danger);
       padding: 10px 20px; font-size: 14px; text-align: center;
     }
     #llm-panel {
@@ -213,6 +234,7 @@
       <button id="toggle" class="primary">Start</button>
       <button id="pause" title="Pause sending audio (keeps the session open)" disabled>Pause</button>
       <div class="status"><span id="dot" class="dot"></span><span id="state">idle</span></div>
+      <button id="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">☀️</button>
     </div>
   </header>
 
