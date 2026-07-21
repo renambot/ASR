@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.png" alt="EVL ASR" width="220" /></p>
+
 # EVL ASR — browser mic → NVIDIA NIM (Riva) realtime ASR
 
 A minimal web app for **indefinite live speech-to-text**. Pick a microphone in

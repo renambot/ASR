@@ -1,3 +1,5 @@
+<p align="center"><img src="logo.png" alt="EVL ASR" width="200" /></p>
+
 # EVL ASR — Architecture, Code, and Operations
 
 A developer's guide to the EVL ASR web app: how it's built, how the code is
