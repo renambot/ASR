@@ -1,16 +1,16 @@
-# Live ASR — Architecture, Code, and Operations
+# EVL ASR — Architecture, Code, and Operations
 
-A developer's guide to the Live ASR web app: how it's built, how the code is
+A developer's guide to the EVL ASR web app: how it's built, how the code is
 organized, what the UI does, and how to deploy and configure it. For a quick
 user-facing overview see the top-level [`README.md`](../README.md).
 
-![Live ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](screenshot.jpg)
+![EVL ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](screenshot.jpg)
 
 ---
 
 ## 1. What it is
 
-Live ASR is a minimal web app for **indefinite live speech-to-text**. A browser
+EVL ASR is a minimal web app for **indefinite live speech-to-text**. A browser
 captures microphone audio, streams it to a small Python proxy over a WebSocket,
 and the proxy relays it to an **NVIDIA ASR NIM** (Riva, OpenAI-Realtime-style
 protocol). Transcribed text flows back and grows an append-only transcript that

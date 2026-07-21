@@ -1,4 +1,4 @@
-# Live ASR — browser mic → NVIDIA NIM (Riva) realtime ASR
+# EVL ASR — browser mic → NVIDIA NIM (Riva) realtime ASR
 
 A minimal web app for **indefinite live speech-to-text**. Pick a microphone in
 the browser, stream audio to your NVIDIA ASR NIM, and watch an append-only
@@ -7,7 +7,7 @@ Markdown. Optional speaker diarization labels who is talking (with renamable
 speakers), background LLM analyzers surface topics/summaries live, and an AI
 summary runs on demand.
 
-![Live ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](docs/screenshot.jpg)
+![EVL ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](docs/screenshot.jpg)
 
 ## How it works
 

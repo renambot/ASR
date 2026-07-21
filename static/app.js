@@ -1,4 +1,4 @@
-// Live ASR front end.
+// EVL ASR front end.
 // Captures the selected mic, streams 16 kHz Int16 PCM to the proxy over a
 // WebSocket, and renders an append-only transcript that survives reconnects.
 //

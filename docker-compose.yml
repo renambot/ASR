@@ -1,4 +1,4 @@
-# Live ASR proxy in Docker.
+# EVL ASR proxy in Docker.
 #   docker compose up -d --build
 # then open http://localhost:8080
 #

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# GO — start the Live ASR web app.
+# GO — start the EVL ASR web app.
 #
 # Every setting is defined right here in this file. Edit the values below and
 # run `./GO`. No environment setup needed.
@@ -101,7 +101,7 @@ else
   exit 1
 fi
 
-echo "Live ASR  ->  http://${HOST}:${PORT}"
+echo "EVL ASR  ->  http://${HOST}:${PORT}"
 echo "Upstream  ->  ${NIM_SCHEME}://${NIM_HOST}:${NIM_PORT}${NIM_PATH}?intent=${NIM_INTENT}"
 echo "Model=${ASR_MODEL:-default}  Lang=${ASR_LANGUAGE}  Rate=${SAMPLE_RATE}  Punct=${AUTO_PUNCT}"
 [[ "$SSL_ON" == "yes" ]] && echo "TLS       ->  enabled"

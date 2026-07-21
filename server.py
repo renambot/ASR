@@ -1,5 +1,5 @@
 """
-Live ASR web proxy for an NVIDIA NIM (Riva) realtime ASR instance.
+EVL ASR web proxy for an NVIDIA NIM (Riva) realtime ASR instance.
 
 Flow:
   Browser mic --(binary PCM16 16kHz mono over WS)--> this proxy
@@ -222,7 +222,7 @@ load_analyzers()
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="Live ASR Proxy")
+app = FastAPI(title="EVL ASR Proxy")
 
 
 def nim_url() -> str:
@@ -947,7 +947,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # were registered on `app`; we mount that under BASE_PATH on a fresh parent and
 # rebind `app` (uvicorn imports `server:app` after this module finishes).
 if BASE_PATH:
-    _root = FastAPI(title="Live ASR Proxy (root)")
+    _root = FastAPI(title="EVL ASR Proxy (root)")
     _root.mount(BASE_PATH, app)
 
     @_root.get("/")

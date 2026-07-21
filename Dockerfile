@@ -1,4 +1,4 @@
-# Live ASR proxy — browser mic -> NIM realtime ASR.
+# EVL ASR proxy — browser mic -> NIM realtime ASR.
 # All NIM/ASR settings are plain environment variables (see docker-compose.yml
 # or GO for the full list); nothing is baked into the image.
 FROM python:3.12-slim
