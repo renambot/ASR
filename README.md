@@ -215,10 +215,18 @@ The server then serves the page, static assets, `/ws`, `/config`, `/llm` and
 ```
 GO                      # launcher: all settings, then `./GO`
 GO.local.example        # copy to GO.local (git-ignored) for secrets/overrides
-server.py               # proxy: reconnect, commit/endpointing, diarization,
-                        #   analyzers, LLM (/llm, /analyze), admin, static hosting
-static/index.html       # UI (markup + all CSS)
-static/app.js           # capture, stream, render, exports, analyzers, panels
+server.py               # uvicorn entrypoint (re-exports the app from routes.py)
+config.py               # env-driven settings + logging
+analyzers.py            # background-analyzer registry (validate/load/save)
+nim.py                  # NIM session config + transcript-event parsing
+llm.py                  # LLM chat call + shared prompt helpers
+bridge.py               # per-client browser<->NIM bridge (the core class)
+routes.py               # FastAPI endpoints, static hosting, BASE_PATH mount
+static/index.html       # UI markup
+static/style.css        # all styles (dark + light themes)
+static/js/              # front-end, split by concern and loaded in order:
+                        #   core, devices, transcript, speakers, ws, session,
+                        #   exports, ai, panels, admin, main
 static/pcm-worklet.js   # 16 kHz Int16 PCM resampler (audio thread)
 analyzers.json          # default background-analyzer prompts and schedules
 Dockerfile              # container image

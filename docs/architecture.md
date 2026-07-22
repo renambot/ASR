@@ -49,9 +49,16 @@ session is transparently reconnected** if it drops — the key to multi-hour use
 
 | Component | File | Responsibility |
 |---|---|---|
-| Proxy / API server | `server.py` | FastAPI app: WebSocket bridge, NIM connection, analyzers, LLM endpoints, static hosting |
-| Page + styles | `static/index.html` | Markup and all CSS (inline, theme in CSS variables) |
-| Front-end logic | `static/app.js` | Capture, streaming, transcript rendering, panels, exports |
+| Entrypoint | `server.py` | Thin uvicorn entrypoint re-exporting the app from `routes.py` |
+| Settings | `config.py` | Env-driven configuration + logging |
+| Analyzer registry | `analyzers.py` | Validate/load/save the background-analyzer set |
+| NIM protocol | `nim.py` | Session config (incl. per-connection overrides) + transcript-event parsing |
+| LLM client | `llm.py` | OpenAI-compatible chat call + shared prompt helpers |
+| Bridge | `bridge.py` | The per-client browser↔NIM bridge (the core class) |
+| HTTP/WS API | `routes.py` | FastAPI endpoints, static hosting, `BASE_PATH` mount |
+| Page | `static/index.html` | Markup |
+| Styles | `static/style.css` | All CSS (dark + light themes via CSS variables) |
+| Front-end logic | `static/js/*.js` | Split by concern, loaded in order with a shared global scope: `core`, `devices`, `transcript`, `speakers`, `ws`, `session`, `exports`, `ai`, `panels`, `admin`, `main` |
 | Audio worklet | `static/pcm-worklet.js` | Resamples mic audio to 16 kHz Int16 PCM on the audio thread |
 | Launcher | `GO` | Bash script holding every setting as an env var, then runs uvicorn |
 | Local secrets | `GO.local` / `.env` | Git-ignored overrides (API keys, endpoints) |
@@ -82,10 +89,14 @@ the proxy supports two modes:
 
 ---
 
-## 3. Backend (`server.py`)
+## 3. Backend (Python modules)
 
-An **async FastAPI** application (uvicorn/ASGI). Settings are read from
-environment variables at import time into module-level constants.
+An **async FastAPI** application (uvicorn/ASGI), split into focused modules —
+`config.py` (settings), `analyzers.py` (registry), `nim.py` (protocol),
+`llm.py` (chat client), `bridge.py` (the per-client bridge), and `routes.py`
+(endpoints) — with `server.py` as the thin `uvicorn server:app` entrypoint.
+Settings are read from environment variables at import time into module-level
+constants in `config.py`.
 
 ### The `Bridge` class
 
@@ -158,10 +169,12 @@ basis.
 ### Sub-path hosting (`BASE_PATH`)
 
 When `BASE_PATH` is set (e.g. `/asr`), the whole FastAPI app is mounted under
-that prefix on a parent app, and `/` redirects there. The index route injects
-`window.__BASE__` so the client builds correctly prefixed URLs, and rewrites
-static asset paths. Empty `BASE_PATH` serves at the root. The reverse proxy must
-forward the path unchanged (do not strip the prefix).
+that prefix on a parent app, and `/` redirects there. Empty `BASE_PATH` serves
+at the root. The reverse proxy must forward the path unchanged (do not strip
+the prefix). On the client, fetches and asset URLs are relative (they work
+under any prefix); the WebSocket URL uses the `BASE` constant at the top of
+`static/js/core.js`, currently hardcoded to the deployed sub-path — the server
+also injects `window.__BASE__` should the client want to derive it instead.
 
 ### Security: what's exposed to the client
 
@@ -205,33 +218,35 @@ browser's capture rate to the target `SAMPLE_RATE` and emits Int16 PCM frames to
 the main thread, which forwards them over the WebSocket. Running resampling off
 the main thread keeps the UI responsive during multi-hour sessions.
 
-### `app.js`
+### `js/` (formerly one `app.js`)
 
-Organized by concern (all sharing a cached `els` map of DOM nodes):
+Eleven scripts loaded in order as classic scripts, sharing one global scope
+(so they behave exactly like the single file they were cut from). All share
+the cached `els` map of DOM nodes defined in `core.js`:
 
-- **Session / capture** — `start()`/`stop()` build the Web Audio graph
-  (`getUserMedia` → `MediaStreamSource` → worklet → zero-gain sink), open the
-  WebSocket, and manage the elapsed timer. Pause/Resume drops frames and mutes
-  the mic track without tearing down the session.
-- **WebSocket** — `connectWS()` handles reconnect, and the `onmessage` dispatch
-  routes each server message type.
-- **Transcript model** — `finalSegments` (`{text, speaker, ms}`) plus a live
-  `interimText`. `composeLines()`/`composeText()` group by speaker and apply
-  custom names; `renderTranscript()` paints the DOM.
-- **Speakers** — a side-panel row per detected speaker; names are stored in
-  `speakerNames` and pushed to the server (`sendSpeakerNames()`) so analyzers
-  use them too.
-- **Exports** — `exportMarkdown()` builds a `.md` document (title + date →
-  summary → analyses → transcript); Copy sends plain transcript text.
-- **AI / analyzers** — the AI Summary button calls `/llm`; the Admin tab edits
-  analyzers and calls `/analyze` for on-demand runs. An AI activity indicator
-  (`aiClientCount` + server `ai_running`) turns purple while any AI runs.
-- **Admin persistence** — the analyzer set is mirrored to
-  `localStorage["asr.analyzers.v1"]` and re-applied to the server on load and
-  at startup, so it survives restarts / non-writable config files.
-
-The base URL prefix is read once from `window.__BASE__` into `BASE` and used to
-build every same-origin URL (WebSocket, fetches, worklet).
+- **`core.js`** — `BASE`, the `els` DOM map, session/transcript state, and the
+  per-session transcription settings (localStorage-backed).
+- **`devices.js`** — mic enumeration and permission handling.
+- **`transcript.js`** — `composeLines()`/`composeText()` group segments by
+  speaker and apply custom names; `renderTranscript()` paints the DOM.
+- **`speakers.js`** — the side-panel row per detected speaker; names are stored
+  in `speakerNames` and pushed to the server so analyzers use them too.
+- **`ws.js`** — `connectWS()` builds the `/ws` URL (with per-session ASR query
+  params), handles reconnect, and dispatches each server message type.
+- **`session.js`** — `start()`/`stop()` build the Web Audio graph
+  (`getUserMedia` → `MediaStreamSource` → worklet → zero-gain sink) and manage
+  the elapsed timer. Pause/Resume drops frames and mutes the mic track without
+  tearing down the session.
+- **`exports.js`** — `exportMarkdown()` (title + date → summary → analyses →
+  transcript), the raw timestamped transcript download, and the WAV encoder.
+- **`ai.js`** — the AI activity indicator (`aiClientCount` + server
+  `ai_running`), the AI Summary button (`/llm`), and session-count polling.
+- **`panels.js`** — side-panel tab switching and Live-analysis card rendering
+  (the Meeting Summary is routed to the main view).
+- **`admin.js`** — the Analysis-tab analyzer editor, its
+  `localStorage["asr.analyzers.v1"]` persistence (re-applied to the server on
+  load), and Run now / Run all via `/analyze`.
+- **`main.js`** — Clear/Start/Pause/theme handlers and page bootstrap.
 
 ---
 
