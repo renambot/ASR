@@ -150,6 +150,7 @@ basis.
 |---|---|---|
 | `/` | GET | Serves `index.html`, injecting `window.__BASE__` and prefixing static URLs |
 | `/static/*` | GET | Static assets |
+| `/sdk/asr-client.js` | GET | The headless client SDK (readable source, from `packages/asr-client/src`) |
 | `/config` | GET | Non-secret client config + per-connection ASR **defaults**: `{sample_rate, language, model, llm, llm_model, sessions, diarization, max_speakers, auto_punct, endpointing}` |
 | `/ws` | WS | The audio/transcript bridge. Accepts per-connection overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=&analyzers=` — merged over the env defaults by `session_opts()` for that session only. `analyzers` defaults on when absent; the SDK sends `analyzers=0` unless the consumer opts in |
 | `/llm` | POST | Run the transcript through the LLM. Body `{text, analyzer?, instruction?}`; `analyzer` (name or id) uses that analyzer's prompt (drives the AI Summary button → "Meeting Summary") |
@@ -340,7 +341,7 @@ Full table in the [`README.md`](../README.md#settings-in-go). Key groups:
 | Capacity | `MAX_SESSIONS`, `AUDIO_QUEUE_MAX` |
 | LLM | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_SYSTEM_PROMPT`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SEC` |
 | Analyzers | `ANALYZERS_CONFIG`, `ANALYZER_MIN_CHARS`, `ADMIN_TOKEN` |
-| Serving | `BASE_PATH`, `SSL_CERT`, `SSL_KEY` (native: `HOST`, `PORT`) |
+| Serving | `BASE_PATH`, `ALLOWED_ORIGINS`, `SSL_CERT`, `SSL_KEY` (native: `HOST`, `PORT`) |
 | Debug | `DEBUG`, `DEBUG_AUDIO_DIR` |
 
 ### TLS (mic access off localhost)
