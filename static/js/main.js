@@ -2,7 +2,8 @@
 // Loaded as an ordered classic script (shared global scope); see index.html.
 // Wipe the transcript, speaker panel, analysis, AI summary, and captured audio.
 // Used by the Clear button and on Start (each recording begins fresh).
-// speakerNames is kept so returning speaker ids get their names back.
+// speakerNames survives here so a restarted recording re-attaches names to
+// returning speaker ids; the Clear button wipes them too (below).
 function clearWorkspace() {
   finalSegments = [];
   interimText = "";
@@ -18,8 +19,10 @@ function clearWorkspace() {
 }
 
 els.clear.onclick = () => {
-  if (!fullText() || confirm("Clear the transcript, analysis, and captured audio?")) {
+  if (!fullText() || confirm("Clear the transcript, analysis, speaker names, and captured audio?")) {
     clearWorkspace();
+    speakerNames = {};   // Clear also forgets the custom speaker names
+    sendSpeakerNames();  // sync the (now empty) map to a live session's server
   }
 };
 
