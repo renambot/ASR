@@ -2,10 +2,10 @@
 // Loaded as an ordered classic script (shared global scope); see index.html.
 // Wipe the transcript, speaker panel, analysis, AI summary, and captured audio.
 // Used by the Clear button and on Start (each recording begins fresh).
-// speakerNames survives here so a restarted recording re-attaches names to
-// returning speaker ids; the Clear button wipes them too (below).
+// Speaker names survive here (in the SDK) so a restarted recording re-attaches
+// them to returning speaker ids; the Clear button wipes them too (below).
 function clearWorkspace() {
-  finalSegments = [];
+  asr.clear();          // transcript segments, interim, captured audio
   interimText = "";
   knownSpeakers = [];
   els.speakerList.textContent = "";
@@ -15,14 +15,12 @@ function clearWorkspace() {
   els.analysisEmpty.style.display = "";
   els.llmPanel.hidden = true;
   els.llmResult.textContent = "";
-  debugChunks = [];
 }
 
 els.clear.onclick = () => {
   if (!fullText() || confirm("Clear the transcript, analysis, speaker names, and captured audio?")) {
     clearWorkspace();
-    speakerNames = {};   // Clear also forgets the custom speaker names
-    sendSpeakerNames();  // sync the (now empty) map to a live session's server
+    asr.clear({ names: true }); // also forget the custom speaker names
   }
 };
 
@@ -43,22 +41,18 @@ els.toggle.onclick = async () => {
 };
 
 // Pause/resume: stop (or resume) sending audio while keeping the session and
-// the socket open. Frames are dropped in the worklet handler; we also mute the
-// mic track so nothing is captured, and flush on pause so the last spoken
-// segment still gets transcribed.
+// the socket open. The SDK drops frames, mutes the mic track, and flushes on
+// pause so the last spoken segment still gets transcribed; the status dot
+// updates via its "status" events.
 els.pause.onclick = () => {
   if (!running) return;
   paused = !paused;
-  if (mediaStream) mediaStream.getAudioTracks().forEach((t) => { t.enabled = !paused; });
   if (paused) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try { ws.send(JSON.stringify({ type: "flush" })); } catch {}
-    }
+    asr.pause();
     els.pause.textContent = "Resume";
-    setState("", "paused");
   } else {
+    asr.resume();
     els.pause.textContent = "Pause";
-    setState("connected", "listening");
   }
 };
 

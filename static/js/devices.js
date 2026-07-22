@@ -4,14 +4,13 @@
 // Device handling
 // --------------------------------------------------------------------------
 async function listDevices() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const mics = devices.filter((d) => d.kind === "audioinput");
+  const mics = await AsrClient.listMicrophones();
   const current = els.mic.value;
   els.mic.innerHTML = "";
-  mics.forEach((d, i) => {
+  mics.forEach((m) => {
     const opt = document.createElement("option");
-    opt.value = d.deviceId;
-    opt.textContent = d.label || `Microphone ${i + 1}`;
+    opt.value = m.deviceId;
+    opt.textContent = m.label;
     els.mic.appendChild(opt);
   });
   if (current) els.mic.value = current;
@@ -27,4 +26,3 @@ async function ensurePermissionThenList() {
   }
   await listDevices();
 }
-
