@@ -5,7 +5,14 @@
      running EVL ASR proxy (e.g. https://your-host/speech) and press Start.
 
      Load the SDK either from your proxy (it serves /sdk/asr-client.js) or,
-     as here, straight from the repo checkout. -->
+     as here, straight from the repo checkout.
+
+     If this page is served from a DIFFERENT origin than the proxy, set
+     ALLOWED_ORIGINS on the proxy (e.g. ALLOWED_ORIGINS="https://your-app")
+     so its HTTP API allows CORS and its WebSocket accepts the page. Also,
+     browsers require a secure context (https:// or localhost) for mic
+     access. -->
+
 <html lang="en">
 <head>
   <meta charset="utf-8" />
