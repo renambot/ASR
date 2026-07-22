@@ -1,0 +1,92 @@
+<!doctype html>
+<!-- The simplest complete client for the EVL ASR SDK (@evl/asr-client).
+
+     One button, one status line, one transcript box. Point "Server" at a
+     running EVL ASR proxy (e.g. https://your-host/speech) and press Start.
+
+     Load the SDK either from your proxy (it serves /sdk/asr-client.js) or,
+     as here, straight from the repo checkout. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EVL ASR — minimal SDK client</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 20px; }
+    .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+    input { flex: 1; padding: 8px; font: inherit; }
+    button { padding: 8px 20px; font: inherit; cursor: pointer; }
+    #status { color: #666; font-size: 14px; }
+    #transcript {
+      border: 1px solid #ccc; border-radius: 6px; padding: 12px; min-height: 200px;
+      white-space: pre-wrap; line-height: 1.6;
+    }
+    #interim { color: #999; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>EVL ASR — minimal SDK client</h1>
+
+  <div class="row">
+    <label for="server">Server</label>
+    <input id="server" type="text" value="https://arcade.evl.uic.edu/speech"
+           placeholder="EVL ASR proxy base URL" />
+    <button id="toggle">Start</button>
+    <span id="status">idle</span>
+  </div>
+
+  <div id="transcript"><span id="final"></span><span id="interim"></span></div>
+
+  <!-- The SDK: one file, no dependencies. From a deployed proxy use
+       <script src="https://your-host/speech/sdk/asr-client.js"></script> -->
+  <script src="../packages/asr-client/src/asr-client.js"></script>
+  <script>
+    const toggleBtn = document.getElementById("toggle");
+    const statusEl = document.getElementById("status");
+    const finalEl = document.getElementById("final");
+    const interimEl = document.getElementById("interim");
+
+    let asr = null;
+
+    async function start() {
+      asr = new AsrClient({
+        serverUrl: document.getElementById("server").value.trim(),
+        diarization: true,   // label who is talking (server must support it)
+      });
+
+      // Live hypothesis: replace-style grey text while you speak.
+      asr.on("interim", (text) => { interimEl.textContent = " " + text; });
+
+      // Finalized segment: append a line ("Speaker N: text" when diarized).
+      asr.on("segment", (seg) => {
+        const label = asr.speakerLabel(seg.speaker);
+        finalEl.textContent += (label ? label + ": " : "") + seg.text + "\n";
+        interimEl.textContent = "";
+      });
+
+      asr.on("status", (state, message) => {
+        statusEl.textContent = message || state;
+      });
+      asr.on("error", (e) => { statusEl.textContent = "error: " + e.message; });
+
+      await asr.start();   // asks for mic permission, then streams
+      toggleBtn.textContent = "Stop";
+    }
+
+    async function stop() {
+      statusEl.textContent = "finalizing…";
+      await asr.stop();    // flushes the tail, then closes the session
+      asr = null;
+      toggleBtn.textContent = "Start";
+    }
+
+    toggleBtn.onclick = async () => {
+      toggleBtn.disabled = true;
+      try { await (asr && asr.running ? stop() : start()); }
+      catch (e) { statusEl.textContent = "error: " + e.message; asr = null; }
+      finally { toggleBtn.disabled = false; }
+    };
+  </script>
+</body>
+</html>

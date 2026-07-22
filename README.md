@@ -238,5 +238,6 @@ docker-entrypoint.sh    # container entrypoint (PORT/TLS)
 .env.example            # copy to .env (git-ignored) for Docker secrets
 deploy/nginx-asr.conf   # WebSocket reverse-proxy for the /asr route
 docs/architecture.md    # architecture / code / UI / deployment guide (also the wiki)
+docs/example-client.html# the simplest complete SDK client (start/stop + transcript)
 requirements.txt
 ```
