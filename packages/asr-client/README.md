@@ -10,6 +10,12 @@ LLM analyzers) lives in the proxy; this client captures the mic, streams
 
 ## Install / load
 
+From npm:
+
+```sh
+npm install @evluic/asr-client
+```
+
 Classic script (sets `window.AsrClient`; also served by the proxy at `/sdk/asr-client.js`,
 or use the minified `dist/asr-client.min.js`):
 
