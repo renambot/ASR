@@ -104,6 +104,18 @@
     <button id="clear">Clear</button>
   </footer>
 
-  <script src="static/app.js"></script>
+  <!-- Ordered classic scripts sharing one global scope (formerly app.js).
+       Order matters: core.js defines the DOM refs and state the rest use. -->
+  <script src="static/js/core.js"></script>
+  <script src="static/js/devices.js"></script>
+  <script src="static/js/transcript.js"></script>
+  <script src="static/js/speakers.js"></script>
+  <script src="static/js/ws.js"></script>
+  <script src="static/js/session.js"></script>
+  <script src="static/js/exports.js"></script>
+  <script src="static/js/ai.js"></script>
+  <script src="static/js/panels.js"></script>
+  <script src="static/js/admin.js"></script>
+  <script src="static/js/main.js"></script>
 </body>
 </html>
