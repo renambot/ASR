@@ -9,7 +9,7 @@ Markdown. Optional speaker diarization labels who is talking (with renamable
 speakers), background LLM analyzers surface topics/summaries live, and an AI
 summary runs on demand.
 
-![EVL ASR — live transcript with speaker labels, the Analysis panel, and the Admin analyzer editor](docs/screenshot.jpg)
+![EVL ASR — live transcript with named speakers, the Live analysis panel, and the analyzer editor](docs/screenshot.jpg)
 
 ## How it works
 
