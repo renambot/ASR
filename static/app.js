@@ -417,7 +417,7 @@ function connectWS() {
 // --------------------------------------------------------------------------
 // Begin a capture session: open the mic, build the audio graph, connect the WS.
 async function start() {
-  debugChunks = []; // fresh capture each session
+  clearWorkspace(); // each recording starts fresh (transcript, analysis, audio)
   showNotice("");   // clear any previous capacity/error banner
   try {
     // Match the sample rate the proxy/NIM expect.
@@ -1186,23 +1186,26 @@ els.adminReset.onclick = async () => {
   }
 };
 
+// Wipe the transcript, speaker panel, analysis, AI summary, and captured audio.
+// Used by the Clear button and on Start (each recording begins fresh).
+// speakerNames is kept so returning speaker ids get their names back.
+function clearWorkspace() {
+  finalSegments = [];
+  interimText = "";
+  knownSpeakers = [];
+  els.speakerList.textContent = "";
+  els.speakersEmpty.style.display = "";
+  renderTranscript();
+  els.analysisList.textContent = "";
+  els.analysisEmpty.style.display = "";
+  els.llmPanel.hidden = true;
+  els.llmResult.textContent = "";
+  debugChunks = [];
+}
+
 els.clear.onclick = () => {
   if (!fullText() || confirm("Clear the transcript, analysis, and captured audio?")) {
-    finalSegments = [];
-    interimText = "";
-    // Reset the speaker panel; keep speakerNames so returning speaker ids
-    // (e.g. later in the same session) get their names back automatically.
-    knownSpeakers = [];
-    els.speakerList.textContent = "";
-    els.speakersEmpty.style.display = "";
-    renderTranscript();
-    // Clear the Analysis panel + the AI Summary / LLM output in the main view.
-    els.analysisList.textContent = "";
-    els.analysisEmpty.style.display = "";
-    els.llmPanel.hidden = true;
-    els.llmResult.textContent = "";
-    // Drop the captured audio so Save WAV won't include the old session.
-    debugChunks = [];
+    clearWorkspace();
   }
 };
 
