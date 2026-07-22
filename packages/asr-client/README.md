@@ -1,4 +1,4 @@
-# @evl/asr-client
+# @evluic/asr-client
 
 Headless browser client for an **EVL ASR proxy** ([renambot/ASR](https://github.com/renambot/ASR)):
 live microphone speech-to-text with optional speaker diarization, delivered as
@@ -20,10 +20,10 @@ or use the minified `dist/asr-client.min.js`):
 ES modules / bundlers (TypeScript definitions included):
 
 ```js
-import AsrClient from "@evl/asr-client";   // dist/asr-client.mjs
+import AsrClient from "@evluic/asr-client";   // dist/asr-client.mjs
 ```
 
-CommonJS: `const AsrClient = require("@evl/asr-client");`
+CommonJS: `const AsrClient = require("@evluic/asr-client");`
 
 To rebuild `dist/` after editing the source: `npm install && npm run build`
 (esbuild; the `src/` file itself needs no build step).

@@ -56,7 +56,7 @@ session is transparently reconnected** if it drops — the key to multi-hour use
 | LLM client | `llm.py` | OpenAI-compatible chat call + shared prompt helpers |
 | Bridge | `bridge.py` | The per-client browser↔NIM bridge (the core class) |
 | HTTP/WS API | `routes.py` | FastAPI endpoints, static hosting, `BASE_PATH` mount |
-| Client SDK | `packages/asr-client/` | `@evl/asr-client` — headless browser client (capture + `/ws` protocol as events, worklet inlined); served at `/sdk/asr-client.js` |
+| Client SDK | `packages/asr-client/` | `@evluic/asr-client` — headless browser client (capture + `/ws` protocol as events, worklet inlined); served at `/sdk/asr-client.js` |
 | Page | `static/index.html` | Markup |
 | Styles | `static/style.css` | All CSS (dark + light themes via CSS variables) |
 | Front-end logic | `static/js/*.js` | The app UI — the SDK's reference consumer. Split by concern, loaded in order with a shared global scope: `core`, `devices`, `transcript`, `speakers`, `ws`, `session`, `exports`, `ai`, `panels`, `admin`, `main` |
@@ -221,7 +221,7 @@ Plain ES modules-free JavaScript — no build step, no framework.
 
 ### `packages/asr-client` — the headless SDK
 
-All capture and protocol work lives in `@evl/asr-client` (BSD-3), a single
+All capture and protocol work lives in `@evluic/asr-client` (BSD-3), a single
 dependency-free file served at `/sdk/asr-client.js` and usable by any web app:
 mic capture (the PCM resampler AudioWorklet is inlined and loaded via a Blob
 URL), the `/ws` protocol with reconnect and per-session ASR options,

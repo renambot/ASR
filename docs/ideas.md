@@ -4,8 +4,9 @@ Living list of possible next steps and the reasoning behind settled decisions.
 
 ## SDK (`sdk` branch)
 
-- **Publish `@evl/asr-client` to npm** — dist builds and types are ready;
-  needs the `@evl` npm scope (or a rename) and a version/release routine.
+- **Publish `@evluic/asr-client` to npm** — package is prepared (scope,
+  LICENSE, prepublishOnly build, tarball verified); publish with
+  `npm login && npm publish --access public` from `packages/asr-client`.
 - **`client.analyze(prompts)` / `summarize()`** (v1.1) — thin wrappers over
   the existing stateless `/analyze` and `/llm` endpoints for on-demand runs.
 - **Web Component `<evl-asr>`** — drop-in UI on top of the headless SDK for

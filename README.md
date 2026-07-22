@@ -223,7 +223,7 @@ nim.py                  # NIM session config + transcript-event parsing
 llm.py                  # LLM chat call + shared prompt helpers
 bridge.py               # per-client browser<->NIM bridge (the core class)
 routes.py               # FastAPI endpoints, static hosting, BASE_PATH mount
-packages/asr-client/    # @evl/asr-client — headless browser SDK (BSD-3):
+packages/asr-client/    # @evluic/asr-client — headless browser SDK (BSD-3):
                         #   mic capture + /ws protocol as events; served at
                         #   /sdk/asr-client.js; see its README for the API
 static/index.html       # UI markup

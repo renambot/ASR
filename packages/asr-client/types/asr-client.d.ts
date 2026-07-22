@@ -1,4 +1,4 @@
-// Type definitions for @evl/asr-client — headless browser client for the
+// Type definitions for @evluic/asr-client — headless browser client for the
 // EVL ASR proxy. License: BSD-3-Clause.
 
 /** Options accepted by the constructor and configure(). */

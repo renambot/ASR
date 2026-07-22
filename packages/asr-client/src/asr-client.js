@@ -1,4 +1,4 @@
-// @evl/asr-client — headless browser client for the EVL ASR proxy.
+// @evluic/asr-client — headless browser client for the EVL ASR proxy.
 //
 // Captures the microphone, streams 16 kHz Int16 PCM to an EVL ASR proxy over
 // a WebSocket, and emits transcript events. No DOM, no CSS, no framework.

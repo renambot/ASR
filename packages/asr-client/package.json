@@ -1,5 +1,5 @@
 {
-  "name": "@evl/asr-client",
+  "name": "@evluic/asr-client",
   "version": "0.3.0",
   "description": "Headless browser client for the EVL ASR proxy: live microphone speech-to-text with speaker diarization, as events.",
   "license": "BSD-3-Clause",
@@ -15,7 +15,8 @@
     }
   },
   "scripts": {
-    "build": "esbuild src/asr-client.js --bundle --format=esm --outfile=dist/asr-client.mjs && esbuild src/asr-client.js --minify --outfile=dist/asr-client.min.js"
+    "build": "esbuild src/asr-client.js --bundle --format=esm --outfile=dist/asr-client.mjs && esbuild src/asr-client.js --minify --outfile=dist/asr-client.min.js",
+    "prepublishOnly": "npm run build"
   },
   "files": [
     "src",
