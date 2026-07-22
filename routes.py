@@ -12,7 +12,7 @@ from bridge import Bridge, send_json
 from config import (ADMIN_TOKEN, ASR_LANGUAGE, ASR_MODEL, AUTO_PUNCT, BASE_PATH,
                     DIARIZATION, ENDPOINTING, LLM_BASE_URL, LLM_MODEL,
                     LLM_SYSTEM_PROMPT, MAX_SESSIONS, MAX_SPEAKERS, SAMPLE_RATE,
-                    STATIC_DIR, log)
+                    SDK_DIR, STATIC_DIR, log)
 from llm import chain_suffix, llm_chat
 
 app = FastAPI(title="EVL ASR Proxy")
@@ -223,6 +223,9 @@ async def index():
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# The headless client SDK (packages/asr-client), served so the app and any
+# embedding page can load it from the proxy at /sdk/asr-client.js.
+app.mount("/sdk", StaticFiles(directory=SDK_DIR), name="sdk")
 
 # When a BASE_PATH is configured, re-home the entire app under that prefix so
 # it can be served from a sub-path behind a reverse proxy. All routes above

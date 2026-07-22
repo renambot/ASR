@@ -1,0 +1,14 @@
+{
+  "name": "@evl/asr-client",
+  "version": "0.1.0",
+  "description": "Headless browser client for the EVL ASR proxy: live microphone speech-to-text with speaker diarization, as events.",
+  "license": "BSD-3-Clause",
+  "main": "src/asr-client.js",
+  "files": ["src", "README.md"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/renambot/ASR.git",
+    "directory": "packages/asr-client"
+  },
+  "keywords": ["asr", "speech-to-text", "transcription", "diarization", "nvidia", "riva", "websocket"]
+}

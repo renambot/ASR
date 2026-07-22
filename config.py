@@ -108,3 +108,5 @@ ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
 ANALYZER_MIN_CHARS = int(os.getenv("ANALYZER_MIN_CHARS", "40"))
 
 STATIC_DIR = Path(__file__).parent / "static"
+# The headless client SDK, served at /sdk (see packages/asr-client).
+SDK_DIR = Path(__file__).parent / "packages" / "asr-client" / "src"
