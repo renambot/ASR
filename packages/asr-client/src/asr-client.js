@@ -355,12 +355,15 @@ registerProcessor("pcm-worklet", PCMWorklet);
 
     _connect() {
       const ws = new WebSocket(this._wsUrl());
+      ws.binaryType = "arraybuffer";
       this._ws = ws;
       ws.onopen = () => {
         this._emit("status", "listening");
         this._sendSpeakerNames();
       };
       ws.onclose = () => {
+        // Don't leave stop() hanging if the socket dies during finalization.
+        if (this._sessionEndResolve) { this._sessionEndResolve(); this._sessionEndResolve = null; }
         if (this._running && this._wantReconnect) {
           this._emit("status", "reconnecting");
           this._reconnectTimer = setTimeout(() => {
