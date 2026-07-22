@@ -93,12 +93,11 @@
         asr = new AsrClient({
           serverUrl: document.getElementById("server").value.trim(),
           deviceId: micSel.value || undefined,   // undefined = system default
-          diarization: true,   // label who is talking (server must support it)
+          diarization: false,  // push-to-talk = one voice; keep it simple
         });
         asr.on("interim", (text) => { interimEl.textContent = " " + text; });
         asr.on("segment", (seg) => {
-          const label = asr.speakerLabel(seg.speaker);
-          finalEl.textContent += (label ? label + ": " : "") + seg.text + "\n";
+          finalEl.textContent += seg.text + "\n";
           interimEl.textContent = "";
         });
         asr.on("status", (state, message) => { statusEl.textContent = message || state; });
