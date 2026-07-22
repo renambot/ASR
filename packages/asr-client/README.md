@@ -21,8 +21,13 @@ CommonJS / bundlers: `const AsrClient = require("@evl/asr-client");`
 ## Quick start
 
 ```js
+// Pick a microphone (optional — omit deviceId for the system default).
+// Note: browsers only reveal device labels after a mic permission grant.
+const mics = await AsrClient.listMicrophones();   // [{deviceId, label}]
+
 const asr = new AsrClient({
   serverUrl: "https://your-proxy-host/speech",  // "" if served by the proxy itself
+  deviceId: mics[0].deviceId,
   diarization: true,
   maxSpeakers: 3,
 });
@@ -36,6 +41,9 @@ await asr.start();     // asks for mic permission, starts streaming
 asr.pause();           // stop sending audio, keep the session open
 asr.resume();
 await asr.stop();      // flush, let end-of-meeting analyzers run, tear down
+
+// Switch mics between sessions:
+asr.configure({ deviceId: mics[1].deviceId });    // applies on the next start()
 ```
 
 ## Options (constructor / `configure()`)
