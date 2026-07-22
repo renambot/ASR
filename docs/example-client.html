@@ -15,7 +15,7 @@
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
     h1 { font-size: 20px; }
     .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
-    input { flex: 1; padding: 8px; font: inherit; }
+    input, select { flex: 1; padding: 8px; font: inherit; min-width: 0; }
     button { padding: 8px 20px; font: inherit; cursor: pointer; }
     #status { color: #666; font-size: 14px; }
     #transcript {
@@ -32,6 +32,11 @@
     <label for="server">Server</label>
     <input id="server" type="text" value="https://arcade.evl.uic.edu/speech"
            placeholder="EVL ASR proxy base URL" />
+  </div>
+
+  <div class="row">
+    <label for="mic">Mic</label>
+    <select id="mic"></select>
     <button id="toggle">Start</button>
     <span id="status">idle</span>
   </div>
@@ -46,12 +51,29 @@
     const statusEl = document.getElementById("status");
     const finalEl = document.getElementById("final");
     const interimEl = document.getElementById("interim");
+    const micSel = document.getElementById("mic");
 
     let asr = null;
+
+    // Fill the mic selector. Browsers only reveal device labels after a
+    // permission grant, so this is called again after the first start().
+    async function loadMics() {
+      const mics = await AsrClient.listMicrophones();
+      const current = micSel.value;
+      micSel.innerHTML = "";
+      mics.forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m.deviceId;
+        opt.textContent = m.label;
+        micSel.appendChild(opt);
+      });
+      if (current) micSel.value = current;
+    }
 
     async function start() {
       asr = new AsrClient({
         serverUrl: document.getElementById("server").value.trim(),
+        deviceId: micSel.value || undefined,   // undefined = system default
         diarization: true,   // label who is talking (server must support it)
       });
 
@@ -72,6 +94,8 @@
 
       await asr.start();   // asks for mic permission, then streams
       toggleBtn.textContent = "Stop";
+      micSel.disabled = true;      // the mic is fixed for the session
+      loadMics();                  // permission granted: labels are visible now
     }
 
     async function stop() {
@@ -79,14 +103,17 @@
       await asr.stop();    // flushes the tail, then closes the session
       asr = null;
       toggleBtn.textContent = "Start";
+      micSel.disabled = false;
     }
 
     toggleBtn.onclick = async () => {
       toggleBtn.disabled = true;
       try { await (asr && asr.running ? stop() : start()); }
-      catch (e) { statusEl.textContent = "error: " + e.message; asr = null; }
+      catch (e) { statusEl.textContent = "error: " + e.message; asr = null; micSel.disabled = false; }
       finally { toggleBtn.disabled = false; }
     };
+
+    loadMics();   // labels appear once the first session grants permission
   </script>
 </body>
 </html>
