@@ -1,12 +1,10 @@
 <!doctype html>
 <!-- Push-to-talk client for the EVL ASR SDK (@evl/asr-client).
 
-     Hold the button to stream audio; release to stop sending. The first
-     press starts a session (mic permission + socket — takes a moment);
-     releasing calls pause(), which flushes so the held speech gets
-     transcribed. Later presses resume instantly — the session stays open
-     between presses. "End session" finalizes it (runs any end-of-meeting
-     analyzers on the proxy).
+     Hold the button to record; release to finish. Each hold is one complete
+     session: pressing opens the mic and the socket (takes a moment), and
+     releasing stops it — the tail is flushed and transcribed, the proxy runs
+     any end-of-meeting analyzers, and the session closes.
 
      Load the SDK either from your proxy (it serves /sdk/asr-client.js) or,
      as here, straight from the repo checkout.
@@ -50,8 +48,7 @@
   <div class="row">
     <label for="mic">Mic</label>
     <select id="mic"></select>
-    <button id="ptt" title="Streams audio only while held">🎙 Hold to talk</button>
-    <button id="end" disabled>End session</button>
+    <button id="ptt" title="Records only while held">🎙 Hold to talk</button>
     <span id="status">idle</span>
   </div>
 
@@ -62,7 +59,6 @@
   <script src="../packages/asr-client/src/asr-client.js"></script>
   <script>
     const pttBtn = document.getElementById("ptt");
-    const endBtn = document.getElementById("end");
     const statusEl = document.getElementById("status");
     const finalEl = document.getElementById("final");
     const interimEl = document.getElementById("interim");
@@ -70,7 +66,7 @@
 
     let asr = null;
     let pttHeld = false;
-    let pttStarting = false;
+    let busy = false;   // a session is starting or finalizing; ignore presses
 
     // Fill the mic selector. Browsers only reveal device labels after a
     // permission grant, so this is called again after the first session.
@@ -87,55 +83,58 @@
       if (current) micSel.value = current;
     }
 
-    // First press only: open the mic and the socket, wire the events.
-    async function startSession() {
-      asr = new AsrClient({
-        serverUrl: document.getElementById("server").value.trim(),
-        deviceId: micSel.value || undefined,   // undefined = system default
-        diarization: true,   // label who is talking (server must support it)
-      });
-      asr.on("interim", (text) => { interimEl.textContent = " " + text; });
-      asr.on("segment", (seg) => {
-        const label = asr.speakerLabel(seg.speaker);
-        finalEl.textContent += (label ? label + ": " : "") + seg.text + "\n";
-        interimEl.textContent = "";
-      });
-      asr.on("status", (state, message) => { statusEl.textContent = message || state; });
-      asr.on("error", (e) => { statusEl.textContent = "error: " + e.message; });
-
-      await asr.start();   // asks for mic permission, then streams
-      endBtn.disabled = false;
-      micSel.disabled = true;      // the mic is fixed for the session
-      loadMics();                  // permission granted: labels are visible now
-    }
-
+    // Press: start a fresh session (mic permission + socket) and record.
     async function pttDown(e) {
       e.preventDefault();
       pttHeld = true;
-      if (pttStarting) return;
+      if (busy || asr) return;
+      busy = true;
       try {
-        if (asr && asr.running) {
-          asr.resume();                    // instant on later presses
-        } else {
-          pttStarting = true;
-          await startSession();            // first press: opens mic + socket
-          pttStarting = false;
-          if (!pttHeld) { asr.pause(); return; }  // released while connecting
-        }
+        asr = new AsrClient({
+          serverUrl: document.getElementById("server").value.trim(),
+          deviceId: micSel.value || undefined,   // undefined = system default
+          diarization: true,   // label who is talking (server must support it)
+        });
+        asr.on("interim", (text) => { interimEl.textContent = " " + text; });
+        asr.on("segment", (seg) => {
+          const label = asr.speakerLabel(seg.speaker);
+          finalEl.textContent += (label ? label + ": " : "") + seg.text + "\n";
+          interimEl.textContent = "";
+        });
+        asr.on("status", (state, message) => { statusEl.textContent = message || state; });
+        asr.on("error", (err) => { statusEl.textContent = "error: " + err.message; });
+
+        micSel.disabled = true;
+        await asr.start();   // asks for mic permission, then streams
+        loadMics();          // permission granted: labels are visible now
+        busy = false;
+        if (!pttHeld) { await endSession(); return; }  // released while connecting
         pttBtn.classList.add("rec");
       } catch (err) {
-        pttStarting = false;
         statusEl.textContent = "error: " + err.message;
+        asr = null;
+        micSel.disabled = false;
+        busy = false;
       }
+    }
+
+    // Release: finish the session — flush the tail, let the proxy run its
+    // end-of-meeting analyzers, close the socket.
+    async function endSession() {
+      pttBtn.classList.remove("rec");
+      if (!asr || busy) return;
+      busy = true;
+      statusEl.textContent = "finalizing…";
+      try { await asr.stop(); } catch (err) { /* already down */ }
+      asr = null;
+      micSel.disabled = false;
+      busy = false;
     }
 
     function pttUp() {
       if (!pttHeld) return;
       pttHeld = false;
-      if (asr && asr.running && !asr.paused) {
-        asr.pause();   // flushes: the held speech gets transcribed
-      }
-      pttBtn.classList.remove("rec");
+      endSession();
     }
 
     pttBtn.addEventListener("pointerdown", pttDown);
@@ -143,15 +142,6 @@
     pttBtn.addEventListener("pointercancel", pttUp);
     pttBtn.addEventListener("pointerleave", pttUp);
     pttBtn.addEventListener("contextmenu", (e) => e.preventDefault());
-
-    endBtn.onclick = async () => {
-      endBtn.disabled = true;
-      statusEl.textContent = "finalizing…";
-      try { await asr.stop(); } catch (e) { /* already down */ }
-      asr = null;
-      micSel.disabled = false;
-      pttBtn.classList.remove("rec");
-    };
 
     loadMics();   // labels appear once the first session grants permission
   </script>
