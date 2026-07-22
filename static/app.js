@@ -679,7 +679,7 @@ let aiModel = "";        // LLM model the analyzers / AI Summary use
 function updateAiIndicator() {
   const running = aiClientCount > 0 || aiServerRunning;
   els.aiActivity.classList.toggle("running", running);
-  els.aiLabel.textContent = aiModel || "AI";
+  els.aiLabel.textContent = aiModel ? `AI: ${aiModel}` : "AI";
   els.aiActivity.title = aiModel
     ? `AI model: ${aiModel} — ${running ? "running…" : "idle"}`
     : (running ? "AI running…" : "AI idle");
