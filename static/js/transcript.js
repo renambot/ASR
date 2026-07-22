@@ -8,20 +8,10 @@ function setState(cls, label) {
   els.state.textContent = label;
 }
 
-// Push the custom speaker-name map to the server so its background analyzers
-// use the names ("Alice: …") instead of raw "Speaker 0: …" labels.
-function sendSpeakerNames() {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    try { ws.send(JSON.stringify({ type: "speaker_names", names: speakerNames })); } catch {}
-  }
-}
-
+// Custom names live in the SDK (asr.setSpeakerName syncs them to the server
+// so the background analyzers use them too).
 function speakerLabel(s) {
-  if (s === null || s === undefined) return null;
-  const key = String(s);
-  const custom = speakerNames[key] && speakerNames[key].trim();
-  if (custom) return custom;
-  return /^\d+$/.test(key) ? `Speaker ${key}` : key;
+  return asr.speakerLabel(s);
 }
 
 // Group the committed segments into display lines, starting a new line
@@ -30,7 +20,7 @@ function speakerLabel(s) {
 function composeLines() {
   const lines = []; // {speaker, parts: []}
   let last = undefined;
-  for (const seg of finalSegments) {
+  for (const seg of asr.segments) {
     const lbl = speakerLabel(seg.speaker);
     if (lbl !== null && seg.speaker !== last) {
       lines.push({ speaker: seg.speaker, parts: [seg.text] });
@@ -75,7 +65,7 @@ function renderTranscript() {
   }
   els.transcript.appendChild(els.interim);
   els.interim.textContent = interimText;
-  const words = finalSegments.reduce(
+  const words = asr.segments.reduce(
     (n, s) => n + (s.text.trim() ? s.text.trim().split(/\s+/).length : 0), 0);
   els.words.textContent = words + (words === 1 ? " word" : " words");
   // Autoscroll if the user is near the bottom.

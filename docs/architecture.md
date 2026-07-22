@@ -56,10 +56,10 @@ session is transparently reconnected** if it drops — the key to multi-hour use
 | LLM client | `llm.py` | OpenAI-compatible chat call + shared prompt helpers |
 | Bridge | `bridge.py` | The per-client browser↔NIM bridge (the core class) |
 | HTTP/WS API | `routes.py` | FastAPI endpoints, static hosting, `BASE_PATH` mount |
+| Client SDK | `packages/asr-client/` | `@evluic/asr-client` — headless browser client (capture + `/ws` protocol as events, worklet inlined); served at `/sdk/asr-client.js` |
 | Page | `static/index.html` | Markup |
 | Styles | `static/style.css` | All CSS (dark + light themes via CSS variables) |
-| Front-end logic | `static/js/*.js` | Split by concern, loaded in order with a shared global scope: `core`, `devices`, `transcript`, `speakers`, `ws`, `session`, `exports`, `ai`, `panels`, `admin`, `main` |
-| Audio worklet | `static/pcm-worklet.js` | Resamples mic audio to 16 kHz Int16 PCM on the audio thread |
+| Front-end logic | `static/js/*.js` | The app UI — the SDK's reference consumer. Split by concern, loaded in order with a shared global scope: `core`, `devices`, `transcript`, `speakers`, `ws`, `session`, `exports`, `ai`, `panels`, `admin`, `main` |
 | Launcher | `GO` | Bash script holding every setting as an env var, then runs uvicorn |
 | Local secrets | `GO.local` / `.env` | Git-ignored overrides (API keys, endpoints) |
 | Analyzer defaults | `analyzers.json` | Default background-analyzer prompts and schedules |
@@ -150,8 +150,9 @@ basis.
 |---|---|---|
 | `/` | GET | Serves `index.html`, injecting `window.__BASE__` and prefixing static URLs |
 | `/static/*` | GET | Static assets |
+| `/sdk/asr-client.js` | GET | The headless client SDK (readable source, from `packages/asr-client/src`) |
 | `/config` | GET | Non-secret client config + per-connection ASR **defaults**: `{sample_rate, language, model, llm, llm_model, sessions, diarization, max_speakers, auto_punct, endpointing}` |
-| `/ws` | WS | The audio/transcript bridge. Accepts per-connection ASR overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=` — merged over the env defaults by `session_opts()` for that session only |
+| `/ws` | WS | The audio/transcript bridge. Accepts per-connection overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=&analyzers=` — merged over the env defaults by `session_opts()` for that session only. `analyzers` defaults on when absent; the SDK sends `analyzers=0` unless the consumer opts in |
 | `/llm` | POST | Run the transcript through the LLM. Body `{text, analyzer?, instruction?}`; `analyzer` (name or id) uses that analyzer's prompt (drives the AI Summary button → "Meeting Summary") |
 | `/analyze` | POST | **Stateless** run of analyzer prompts. Body `{text, analyzers:[{id,name,prompt,mode}]}` → `{results:[{id,name,result|error}]}`. Powers Admin "Run now" / "Run all" so they work outside a live session |
 | `/admin/analyzers` | GET/PUT | Read / replace the analyzer registry (`X-Admin-Token` if `ADMIN_TOKEN` set) |
@@ -197,6 +198,13 @@ The public `GET /config` returns only non-secret fields the client needs:
 { "sample_rate", "language", "model", "llm": <bool>, "llm_model", "sessions" }
 ```
 
+**Cross-origin embedding:** by default the proxy serves same-origin browsers
+only (no CORS headers). Setting `ALLOWED_ORIGINS` (comma-separated, or `*`)
+adds CORS to the HTTP API **and** an `Origin` gate on `/ws` for pages using the
+client SDK from other web apps; same-host pages and non-browser clients always
+pass. Note the WS gate is a *tightening*: without it, any page can open `/ws`
+(WebSockets aren't subject to the same-origin policy).
+
 **Information disclosure to note:** `/config` is unauthenticated, so any visitor
 who can load the page can see the **model names** (`model` = ASR model,
 `llm_model` = the analyzer/AI-Summary model), the language, the sample rate, and
@@ -207,40 +215,41 @@ prompt text) are protected by `ADMIN_TOKEN` when it is set.
 
 ---
 
-## 4. Front end (`static/`)
+## 4. Front end (`static/` + the SDK)
 
 Plain ES modules-free JavaScript — no build step, no framework.
 
-### `pcm-worklet.js`
+### `packages/asr-client` — the headless SDK
 
-An `AudioWorkletProcessor` running on the audio thread. It resamples the
-browser's capture rate to the target `SAMPLE_RATE` and emits Int16 PCM frames to
-the main thread, which forwards them over the WebSocket. Running resampling off
-the main thread keeps the UI responsive during multi-hour sessions.
+All capture and protocol work lives in `@evluic/asr-client` (BSD-3), a single
+dependency-free file served at `/sdk/asr-client.js` and usable by any web app:
+mic capture (the PCM resampler AudioWorklet is inlined and loaded via a Blob
+URL), the `/ws` protocol with reconnect and per-session ASR options,
+pause/flush/stop-with-`session_end` semantics, speaker names, transcript
+composition, and optional WAV capture — exposed as an event API
+(`interim`/`segment`/`speaker`/`status`/`analysis`/`ai_running`/`error`).
+See `packages/asr-client/README.md` for the full contract.
 
-### `js/` (formerly one `app.js`)
+### `js/` — the app UI (the SDK's reference consumer)
 
-Eleven scripts loaded in order as classic scripts, sharing one global scope
-(so they behave exactly like the single file they were cut from). All share
-the cached `els` map of DOM nodes defined in `core.js`:
+Eleven scripts loaded in order as classic scripts, sharing one global scope.
+All share the cached `els` DOM map and the `asr` client from `core.js`:
 
-- **`core.js`** — `BASE`, the `els` DOM map, session/transcript state, and the
-  per-session transcription settings (localStorage-backed).
-- **`devices.js`** — mic enumeration and permission handling.
-- **`transcript.js`** — `composeLines()`/`composeText()` group segments by
-  speaker and apply custom names; `renderTranscript()` paints the DOM.
-- **`speakers.js`** — the side-panel row per detected speaker; names are stored
-  in `speakerNames` and pushed to the server so analyzers use them too.
-- **`ws.js`** — `connectWS()` builds the `/ws` URL (with per-session ASR query
-  params), handles reconnect, and dispatches each server message type.
-- **`session.js`** — `start()`/`stop()` build the Web Audio graph
-  (`getUserMedia` → `MediaStreamSource` → worklet → zero-gain sink) and manage
-  the elapsed timer. Pause/Resume drops frames and mutes the mic track without
-  tearing down the session.
+- **`core.js`** — `BASE`, the `els` DOM map, UI state, per-session settings
+  (localStorage-backed), and the `AsrClient` instance.
+- **`devices.js`** — mic list (via `AsrClient.listMicrophones`) + permission.
+- **`transcript.js`** — `composeLines()`/`composeText()` group `asr.segments`
+  by speaker; `renderTranscript()` paints the DOM.
+- **`speakers.js`** — the side-panel row per detected speaker; typed names go
+  to `asr.setSpeakerName()` (synced to the server for the analyzers).
+- **`ws.js`** — wires the SDK events to the UI (status dot, transcript,
+  analysis cards, the AI indicator, the at-capacity notice).
+- **`session.js`** — `start()`/`stop()` drive `asr.start()`/`asr.stop()` and
+  the header controls / elapsed timer.
 - **`exports.js`** — `exportMarkdown()` (title + date → summary → analyses →
-  transcript), the raw timestamped transcript download, and the WAV encoder.
-- **`ai.js`** — the AI activity indicator (`aiClientCount` + server
-  `ai_running`), the AI Summary button (`/llm`), and session-count polling.
+  transcript), the raw timestamped transcript download, `asr.getWav()`.
+- **`ai.js`** — the AI activity indicator, the AI Summary button (`/llm`),
+  and session-count polling.
 - **`panels.js`** — side-panel tab switching and Live-analysis card rendering
   (the Meeting Summary is routed to the main view).
 - **`admin.js`** — the Analysis-tab analyzer editor, its
@@ -332,7 +341,7 @@ Full table in the [`README.md`](../README.md#settings-in-go). Key groups:
 | Capacity | `MAX_SESSIONS`, `AUDIO_QUEUE_MAX` |
 | LLM | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_SYSTEM_PROMPT`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SEC` |
 | Analyzers | `ANALYZERS_CONFIG`, `ANALYZER_MIN_CHARS`, `ADMIN_TOKEN` |
-| Serving | `BASE_PATH`, `SSL_CERT`, `SSL_KEY` (native: `HOST`, `PORT`) |
+| Serving | `BASE_PATH`, `ALLOWED_ORIGINS`, `SSL_CERT`, `SSL_KEY` (native: `HOST`, `PORT`) |
 | Debug | `DEBUG`, `DEBUG_AUDIO_DIR` |
 
 ### TLS (mic access off localhost)

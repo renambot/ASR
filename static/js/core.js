@@ -1,19 +1,14 @@
-// core.js — Globals: BASE, cached DOM refs, session/transcript state, per-session settings.
+// core.js — Globals: BASE, cached DOM refs, UI state, per-session settings,
+// and the AsrClient instance the rest of the app drives.
 // Loaded as an ordered classic script (shared global scope); see index.html.
-// EVL ASR front end.
-// Captures the selected mic, streams 16 kHz Int16 PCM to the proxy over a
-// WebSocket, and renders an append-only transcript that survives reconnects.
 //
-// Wire protocol with the proxy (JSON text, plus raw binary PCM frames up):
-//   up   : binary Int16 PCM frames; {type:"flush"} / {type:"stop"} controls
-//   down : {type:"interim", text}          -- live hypothesis (replace)
-//          {type:"final", text, speaker?}  -- committed segment (append)
-//          {type:"status", state}          -- connection state
-//          {type:"error", message}
+// EVL ASR front end. Capture, streaming, and the proxy wire protocol live in
+// the headless SDK (sdk/asr-client.js — see packages/asr-client); these
+// scripts are the reference consumer: they wire AsrClient events to the UI.
 
 // Base URL path the app is served under (set by the server for sub-path
-// deployments, e.g. "/asr"; empty when served at the root). All same-origin
-// URLs — the WebSocket, fetches, and the worklet module — are built with it.
+// deployments, e.g. "/asr"; empty when served at the root). Passed to the SDK
+// as serverUrl; page fetches stay relative.
 const BASE = "/speech";
 
 // Cached DOM element references.
@@ -75,32 +70,19 @@ function showNotice(text) {
   els.notice.hidden = !text;
 }
 
-// --- Session state (reset/torn down by start()/stop()) ---
-let running = false;   // a capture session is active
-let paused = false;    // session live but audio frames are not being sent
-let ws = null;         // WebSocket to the proxy
-let audioCtx = null;   // Web Audio context (runs at `sampleRate`)
-let workletNode = null;// PCM capture/resample worklet
-let mediaStream = null;// the selected mic's MediaStream
-let sourceNode = null; // MediaStreamSource feeding the worklet
-let sinkNode = null;   // zero-gain sink so the audio graph actually renders
-let sampleRate = 16000;
-let debugChunks = [];  // captured PCM16 frames for the Save WAV debug button
-const DEBUG_MAX_BYTES = 16000 * 2 * 600; // cap capture at ~10 min
-
-// --- Transcript state ---
-let finalSegments = []; // committed pieces: {text, speaker|null}
+// --- UI session state (the SDK owns the capture/socket/transcript state) ---
+let running = false;    // a capture session is active (mirrors asr.running)
+let paused = false;     // session live but audio frames are not being sent
 let interimText = "";   // current in-progress hypothesis (grey text)
-let startTime = 0;
+let startTime = 0;      // for the footer elapsed timer
 let elapsedTimer = null;
-let wantReconnect = false; // auto-reconnect the browser<->proxy socket while running
-let sessionEndResolve = null; // resolves when the server sends session_end after stop
+let serverFull = false; // the proxy rejected us at capacity this session
 
 // --- Per-connection transcription settings (Extras tab) ---
 // Defaults match the server env defaults / current capture constraints; the
 // server's actual defaults are seeded from /config on first load. Choices are
-// saved per browser and applied when a session starts (query params on /ws for
-// ASR options; getUserMedia constraints for mic processing).
+// saved per browser and applied when a session starts (passed to the SDK,
+// which forwards ASR options as /ws query params and mic options to capture).
 const SETTINGS_KEY = "asr.settings.v1";
 const settings = {
   diarization: true, maxSpeakers: 4, autoPunct: true,
@@ -152,11 +134,7 @@ async function resetSettings() {
 }
 els.settingsReset.onclick = resetSettings;
 
-// --- Speaker naming (diarization) ---
-// Custom names entered in the side panel, keyed by the raw speaker id the NIM
-// emits (usually "0", "1", …). Names apply to the rendered transcript AND to
-// Copy / Download, since both go through speakerLabel()/composeText().
-let speakerNames = {};   // speakerId -> custom name (kept across Clear)
+// --- Speaker display (colors; names live in the SDK) ---
 let knownSpeakers = [];  // speaker ids in order of first appearance
 const SPEAKER_COLORS = [
   "#76b900", "#4da3ff", "#f5a623", "#ff5c8a",
@@ -167,3 +145,22 @@ function speakerColor(s) {
   return SPEAKER_COLORS[(i >= 0 ? i : 0) % SPEAKER_COLORS.length];
 }
 
+// --- The headless ASR client (see packages/asr-client) ---
+// Map the Extras settings onto SDK options; re-applied on every Start.
+function settingsToOptions() {
+  return {
+    diarization: settings.diarization,
+    maxSpeakers: settings.maxSpeakers,
+    punctuation: settings.autoPunct,
+    noiseSuppression: settings.noiseSuppression,
+    echoCancellation: settings.echoCancellation,
+    autoGain: settings.autoGain,
+  };
+}
+
+const asr = new AsrClient(Object.assign(
+  // captureAudio: the Save WAV button. analyzers: the app is the full
+  // experience, so it opts in (the SDK default is off for embedders).
+  { serverUrl: BASE, captureAudio: true, analyzers: true },
+  settingsToOptions(),
+));

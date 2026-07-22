@@ -104,8 +104,10 @@
     <button id="clear">Clear</button>
   </footer>
 
-  <!-- Ordered classic scripts sharing one global scope (formerly app.js).
-       Order matters: core.js defines the DOM refs and state the rest use. -->
+  <!-- The headless ASR client SDK (packages/asr-client), then the app's
+       ordered classic scripts sharing one global scope (formerly app.js).
+       Order matters: core.js defines the client, DOM refs, and state. -->
+  <script src="sdk/asr-client.js"></script>
   <script src="static/js/core.js"></script>
   <script src="static/js/devices.js"></script>
   <script src="static/js/transcript.js"></script>

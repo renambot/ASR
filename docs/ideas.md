@@ -4,15 +4,12 @@ Living list of possible next steps and the reasoning behind settled decisions.
 
 ## SDK (`sdk` branch)
 
-- **Publish `@evl/asr-client` to npm** — dist builds and types are ready;
-  needs the `@evl` npm scope (or a rename) and a version/release routine.
+- ~~Publish `@evluic/asr-client` to npm~~ — **done** (0.3.0 live,
+  2026-07-22). Future releases: bump the version in `package.json` +
+  `AsrClient.version`, then `npm publish --access public` from
+  `packages/asr-client` (prepublishOnly rebuilds dist).
 - **`client.analyze(prompts)` / `summarize()`** (v1.1) — thin wrappers over
   the existing stateless `/analyze` and `/llm` endpoints for on-demand runs.
-- **`stop({finalize: false})`** — skip the end-of-meeting analyzers for fast
-  teardown (useful for push-to-talk style consumers).
-- **Web Component `<evl-asr>`** — drop-in UI on top of the headless SDK for
-  consumers who don't want to build their own.
-- **iframe embed + postMessage bridge** — zero-integration option.
 - **Re-adopt `window.__BASE__`** in the app so it works at any `BASE_PATH`
   without editing `core.js` (the server already injects it).
 
@@ -29,6 +26,10 @@ Living list of possible next steps and the reasoning behind settled decisions.
 - Live-analysis panel: user-adjustable split height.
 
 ## Settled decisions (and why)
+
+- **Headless SDK only — no Web Component, no iframe embed** (2026-07). The
+  SDK targets developers who build their own UI; the docs examples cover the
+  integration patterns.
 
 - **Endpointing (VAD) off** — the current NIM model never auto-finalizes, so
   enabling it stalls transcripts until Stop. Backend support kept for a

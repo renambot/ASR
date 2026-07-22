@@ -7,9 +7,10 @@ documented in `docs/architecture.md` (also published to the GitHub wiki) and
 
 ## Branches
 
-- `main` — the deployable app.
-- `sdk` — adds `packages/asr-client` (headless browser SDK, BSD-3) and
-  refactors the app to be its reference consumer. Merge pending live testing.
+- `main` — the deployable app **and** `packages/asr-client`, the headless
+  browser SDK (BSD-3, published as `@evluic/asr-client` on npm); the app is
+  the SDK's reference consumer.
+- `sdk` — the historical feature branch the SDK landed on (merged 2026-07).
 
 ## Running & verifying
 

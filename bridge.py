@@ -295,6 +295,8 @@ class Bridge:
           interval -- due when interval_min has elapsed since its last run
           chain    -- due when the previous analyzer in the list just ran
           on_stop  -- skipped here; handled by _finalize() on Stop."""
+        if not self.opts["analyzers"]:
+            return  # this session opted out of analyzers
         self._analyzer_state: dict[str, dict] = {}  # id -> {"last": t}
         while not self.stop.is_set():
             try:
@@ -338,6 +340,8 @@ class Bridge:
         """Run the end-of-meeting analyzers (mode on_stop), in list order.
         A 'chain' analyzer directly after one of these runs too, with its
         output as context."""
+        if not self.opts["analyzers"]:
+            return  # this session opted out of analyzers
         # Give the flushed last segment a moment to come back from the NIM.
         await asyncio.sleep(1.0)
         text = self._labeled_transcript()

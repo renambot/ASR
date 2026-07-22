@@ -33,12 +33,12 @@ function addSpeakerRow(key) {
   const input = document.createElement("input");
   input.type = "text";
   input.placeholder = /^\d+$/.test(key) ? `Speaker ${key}` : key;
-  input.value = speakerNames[key] || "";
+  input.value = asr.speakerNames[key] || "";
   input.setAttribute("aria-label", `Name for speaker ${key}`);
   input.addEventListener("input", () => {
-    speakerNames[key] = input.value;
+    // The SDK stores the name and syncs it to the server for the analyzers.
+    asr.setSpeakerName(key, input.value);
     renderTranscript();
-    sendSpeakerNames(); // keep the server's analyzer transcript in sync
   });
 
   row.appendChild(swatch);

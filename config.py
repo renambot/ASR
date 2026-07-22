@@ -74,6 +74,13 @@ BASE_PATH = "/" + os.getenv("BASE_PATH", "").strip().strip("/")
 if BASE_PATH == "/":
     BASE_PATH = ""
 
+# Cross-origin embedding (pages using the client SDK from another origin).
+# Comma-separated origins, e.g. "https://app.example.com,https://foo.org",
+# or "*" to allow any. Empty (default) = no CORS headers and no /ws Origin
+# check — the existing same-origin-only behavior, unchanged.
+ALLOWED_ORIGINS = [o.strip().rstrip("/")
+                   for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
 # ---------------------------------------------------------------------------
 # Optional LLM post-processing (OpenAI-compatible chat completions endpoint,
 # e.g. vLLM / Open WebUI / OpenAI). Leave LLM_BASE_URL empty to disable; the
@@ -108,3 +115,5 @@ ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
 ANALYZER_MIN_CHARS = int(os.getenv("ANALYZER_MIN_CHARS", "40"))
 
 STATIC_DIR = Path(__file__).parent / "static"
+# The headless client SDK, served at /sdk (see packages/asr-client).
+SDK_DIR = Path(__file__).parent / "packages" / "asr-client" / "src"

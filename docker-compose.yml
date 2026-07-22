@@ -31,6 +31,7 @@ services:
       # ANALYZERS_CONFIG: "/data/analyzers.json"  # mount a volume to persist admin edits
       ADMIN_TOKEN: "${ADMIN_TOKEN:-}"    # protects the Admin tab ("" = open; from .env)
       BASE_PATH: "${BASE_PATH:-}"        # serve under a sub-path, e.g. /asr ("" = root)
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-}"  # SDK cross-origin embedding ("" = same-origin only)
 
       # Speaker diarization (needs the sortformer model)
       ASR_DIARIZATION: "true"

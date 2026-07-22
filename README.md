@@ -119,6 +119,7 @@ the defaults.
 | `ANALYZER_MIN_CHARS` | `40` | the periodic analyzers wait until the transcript has at least this many characters before running (avoids firing on an empty meeting) |
 | `ADMIN_TOKEN` | *(empty)* | shared secret for the Admin tab / `/admin/analyzers` endpoints; empty = open |
 | `BASE_PATH` | *(empty)* | serve the whole app (page, static, `/ws`, `/config`, `/llm`, `/admin`) under a sub-path, e.g. `/asr`, for reverse-proxy deployments; empty = root. The proxy must forward the path unchanged (do not strip the prefix) |
+| `ALLOWED_ORIGINS` | *(empty)* | comma-separated origins allowed to embed live ASR via the client SDK from other web apps (adds CORS to the HTTP API and an Origin check on `/ws`); `*` = any; empty = same-origin only |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |
 
@@ -222,12 +223,15 @@ nim.py                  # NIM session config + transcript-event parsing
 llm.py                  # LLM chat call + shared prompt helpers
 bridge.py               # per-client browser<->NIM bridge (the core class)
 routes.py               # FastAPI endpoints, static hosting, BASE_PATH mount
+packages/asr-client/    # @evluic/asr-client — headless browser SDK (BSD-3):
+                        #   mic capture + /ws protocol as events; served at
+                        #   /sdk/asr-client.js; see its README for the API
 static/index.html       # UI markup
 static/style.css        # all styles (dark + light themes)
-static/js/              # front-end, split by concern and loaded in order:
-                        #   core, devices, transcript, speakers, ws, session,
-                        #   exports, ai, panels, admin, main
-static/pcm-worklet.js   # 16 kHz Int16 PCM resampler (audio thread)
+static/js/              # the app UI (reference consumer of the SDK), split by
+                        #   concern and loaded in order: core, devices,
+                        #   transcript, speakers, ws, session, exports, ai,
+                        #   panels, admin, main
 analyzers.json          # default background-analyzer prompts and schedules
 Dockerfile              # container image
 docker-compose.yml      # containerized deployment (reads .env)
@@ -235,5 +239,7 @@ docker-entrypoint.sh    # container entrypoint (PORT/TLS)
 .env.example            # copy to .env (git-ignored) for Docker secrets
 deploy/nginx-asr.conf   # WebSocket reverse-proxy for the /asr route
 docs/architecture.md    # architecture / code / UI / deployment guide (also the wiki)
+docs/example-client.html# the simplest complete SDK client (start/stop + transcript)
+docs/example-ptt.html   # push-to-talk SDK client (stream only while held)
 requirements.txt
 ```

@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- Push-to-talk client for the EVL ASR SDK (@evluic/asr-client).
+
+     Hold the button to record; release to finish. Each hold is one complete
+     session: pressing opens the mic and the socket (takes a moment), and
+     releasing stops it — the tail is flushed and transcribed, the proxy runs
+     any end-of-meeting analyzers, and the session closes.
+
+     The SDK is loaded from the npm CDN, so this page works from anywhere.
+     Alternatives: your proxy serves it at /sdk/asr-client.js, or use the
+     repo checkout at ../packages/asr-client/src/asr-client.js.
+
+     If this page is served from a DIFFERENT origin than the proxy, set
+     ALLOWED_ORIGINS on the proxy (e.g. ALLOWED_ORIGINS="https://your-app")
+     so its HTTP API allows CORS and its WebSocket accepts the page. Also,
+     browsers require a secure context (https:// or localhost) for mic
+     access. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EVL ASR — push-to-talk SDK client</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 20px; }
+    .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; }
+    input, select { flex: 1; padding: 8px; font: inherit; min-width: 0; }
+    button { padding: 8px 20px; font: inherit; cursor: pointer; }
+    #status { color: #666; font-size: 14px; }
+    /* Push-to-talk: no text selection / touch scrolling while held. */
+    #ptt { touch-action: none; user-select: none; -webkit-user-select: none; }
+    #ptt.rec { background: #c92a2a; color: #fff; }
+    #transcript {
+      border: 1px solid #ccc; border-radius: 6px; padding: 12px; min-height: 200px;
+      white-space: pre-wrap; line-height: 1.6;
+    }
+    #interim { color: #999; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>EVL ASR — push-to-talk SDK client</h1>
+
+  <div class="row">
+    <label for="server">Server</label>
+    <input id="server" type="text" value="https://arcade.evl.uic.edu/speech"
+           placeholder="EVL ASR proxy base URL" />
+  </div>
+
+  <div class="row">
+    <label for="mic">Mic</label>
+    <select id="mic"></select>
+    <button id="ptt" title="Records only while held">🎙 Hold to talk</button>
+    <span id="status">idle</span>
+  </div>
+
+  <div id="transcript"><span id="final"></span><span id="interim"></span></div>
+
+  <!-- The SDK: one file, no dependencies (@evluic/asr-client on npm).
+       Also served by a deployed proxy at /sdk/asr-client.js. -->
+  <script src="https://cdn.jsdelivr.net/npm/@evluic/asr-client@0.3/dist/asr-client.min.js"></script>
+  <script>
+    const pttBtn = document.getElementById("ptt");
+    const statusEl = document.getElementById("status");
+    const finalEl = document.getElementById("final");
+    const interimEl = document.getElementById("interim");
+    const micSel = document.getElementById("mic");
+
+    let asr = null;
+    let pttHeld = false;
+    let busy = false;   // a session is starting or finalizing; ignore presses
+
+    // Fill the mic selector. Browsers only reveal device labels after a
+    // permission grant, so this is called again after the first session.
+    async function loadMics() {
+      const mics = await AsrClient.listMicrophones();
+      const current = micSel.value;
+      micSel.innerHTML = "";
+      mics.forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m.deviceId;
+        opt.textContent = m.label;
+        micSel.appendChild(opt);
+      });
+      if (current) micSel.value = current;
+    }
+
+    // Press: start a fresh session (mic permission + socket) and record.
+    async function pttDown(e) {
+      e.preventDefault();
+      pttHeld = true;
+      if (busy || asr) return;
+      busy = true;
+      try {
+        asr = new AsrClient({
+          serverUrl: document.getElementById("server").value.trim(),
+          deviceId: micSel.value || undefined,   // undefined = system default
+          diarization: false,  // push-to-talk = one voice; keep it simple
+        });
+        asr.on("interim", (text) => { interimEl.textContent = " " + text; });
+        asr.on("segment", (seg) => {
+          finalEl.textContent += seg.text + "\n";
+          interimEl.textContent = "";
+        });
+        asr.on("status", (state, message) => { statusEl.textContent = message || state; });
+        asr.on("error", (err) => { statusEl.textContent = "error: " + err.message; });
+
+        micSel.disabled = true;
+        await asr.start();   // asks for mic permission, then streams
+        loadMics();          // permission granted: labels are visible now
+        busy = false;
+        if (!pttHeld) { await endSession(); return; }  // released while connecting
+        pttBtn.classList.add("rec");
+      } catch (err) {
+        statusEl.textContent = "error: " + err.message;
+        asr = null;
+        micSel.disabled = false;
+        busy = false;
+      }
+    }
+
+    // Release: finish the session — flush the tail (so the held speech is
+    // transcribed) and close fast, skipping the end-of-meeting analyzers.
+    async function endSession() {
+      pttBtn.classList.remove("rec");
+      if (!asr || busy) return;
+      busy = true;
+      statusEl.textContent = "finalizing…";
+      try { await asr.stop({ finalize: false }); } catch (err) { /* already down */ }
+      asr = null;
+      micSel.disabled = false;
+      busy = false;
+    }
+
+    function pttUp() {
+      if (!pttHeld) return;
+      pttHeld = false;
+      endSession();
+    }
+
+    pttBtn.addEventListener("pointerdown", pttDown);
+    pttBtn.addEventListener("pointerup", pttUp);
+    pttBtn.addEventListener("pointercancel", pttUp);
+    pttBtn.addEventListener("pointerleave", pttUp);
+    pttBtn.addEventListener("contextmenu", (e) => e.preventDefault());
+
+    loadMics();   // labels appear once the first session grants permission
+  </script>
+</body>
+</html>

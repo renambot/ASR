@@ -81,53 +81,21 @@ els.download.onclick = downloadMarkdown;          // Extras tab
 els.downloadFooter.onclick = downloadMarkdown;    // footer copy (same action)
 els.downloadTranscript.onclick = () => saveTextFile(transcriptText(), "transcript", "txt", "text/plain");
 
-// ---- Debug: encode captured PCM16 frames into a WAV and download ----------
-function debugBytes() {
-  let n = 0;
-  for (const c of debugChunks) n += c.length;
-  return n;
-}
-
-// Wrap raw PCM16 chunks in a standard 44-byte WAV header (mono, 16-bit).
-function buildWav(chunks, rate) {
-  let dataLen = 0;
-  for (const c of chunks) dataLen += c.length;
-  const buf = new ArrayBuffer(44 + dataLen);
-  const view = new DataView(buf);
-  const wr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
-  wr(0, "RIFF");
-  view.setUint32(4, 36 + dataLen, true);
-  wr(8, "WAVE");
-  wr(12, "fmt ");
-  view.setUint32(16, 16, true);   // PCM chunk size
-  view.setUint16(20, 1, true);    // format = PCM
-  view.setUint16(22, 1, true);    // mono
-  view.setUint32(24, rate, true); // sample rate
-  view.setUint32(28, rate * 2, true); // byte rate (rate * blockAlign)
-  view.setUint16(32, 2, true);    // block align (mono * 16-bit)
-  view.setUint16(34, 16, true);   // bits per sample
-  wr(36, "data");
-  view.setUint32(40, dataLen, true);
-  let off = 44;
-  const out = new Uint8Array(buf);
-  for (const c of chunks) { out.set(c, off); off += c.length; }
-  return new Blob([buf], { type: "audio/wav" });
-}
-
+// ---- Debug: download the captured audio as a WAV (encoded by the SDK) ------
 els.savewav.onclick = () => {
-  if (debugChunks.length === 0) {
+  const blob = asr.getWav();
+  if (!blob) {
     els.savewav.textContent = "no audio yet";
     setTimeout(() => (els.savewav.textContent = "Save WAV"), 1500);
     return;
   }
-  const blob = buildWav(debugChunks, sampleRate);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  a.download = `capture-${sampleRate}hz-${ts}.wav`;
+  a.download = `capture-${asr.sampleRate}hz-${ts}.wav`;
   a.click();
   URL.revokeObjectURL(a.href);
-  const secs = (debugBytes() / 2 / sampleRate).toFixed(1);
+  const secs = ((blob.size - 44) / 2 / asr.sampleRate).toFixed(1);
   els.savewav.textContent = `saved ${secs}s`;
   setTimeout(() => (els.savewav.textContent = "Save WAV"), 2000);
 };

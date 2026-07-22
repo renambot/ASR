@@ -205,15 +205,7 @@ function collectAnalyzers() {
 // Timestamped, name-applied transcript for analyzers ("[MM:SS] Label: text"),
 // mirroring the server's format so prompts (e.g. Speakers) can cite times.
 function analyzerTranscript() {
-  const fmt = (ms) => {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-  };
-  return finalSegments.map((seg) => {
-    const ts = fmt(seg.ms || 0);
-    const label = (seg.speaker !== null && seg.speaker !== undefined) ? speakerLabel(seg.speaker) : null;
-    return label ? `[${ts}] ${label}: ${seg.text}` : `[${ts}] ${seg.text}`;
-  }).join("\n");
+  return asr.transcriptText({ timestamps: true });
 }
 
 // Force-run analyzers now on the current transcript. Stateless (POST /analyze),
