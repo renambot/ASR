@@ -166,11 +166,14 @@ users):
 - **Label speakers (diarization)** and **Expected speakers** (1–8)
 - **Automatic punctuation**
 - **Microphone processing** — noise suppression, echo cancellation, auto gain
-- **Advanced → Finalize on natural pauses** (endpointing)
 
-The server-side env vars (`ASR_DIARIZATION`, `ASR_MAX_SPEAKERS`, `AUTO_PUNCT`,
-`ASR_ENDPOINTING`) are the **defaults**; these controls override them
-per-connection.
+The server-side env vars (`ASR_DIARIZATION`, `ASR_MAX_SPEAKERS`, `AUTO_PUNCT`)
+are the **defaults**; these controls override them per-connection.
+
+> **Endpointing (`ASR_ENDPOINTING`)** is server-side only (no UI toggle): it
+> depends on the model emitting results with VAD enabled, which the current
+> model does not, so it's left **off** (fixed-interval commits). The backend
+> plumbing remains for a future model with VAD support.
 
 ## Deploying behind nginx
 

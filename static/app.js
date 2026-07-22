@@ -64,7 +64,6 @@ const els = {
   setNs: document.getElementById("set-ns"),
   setEc: document.getElementById("set-ec"),
   setAgc: document.getElementById("set-agc"),
-  setEndpointing: document.getElementById("set-endpointing"),
 };
 
 // Show/hide the banner used for capacity and similar user-facing messages.
@@ -101,7 +100,7 @@ let sessionEndResolve = null; // resolves when the server sends session_end afte
 // ASR options; getUserMedia constraints for mic processing).
 const SETTINGS_KEY = "asr.settings.v1";
 const settings = {
-  diarization: true, maxSpeakers: 4, autoPunct: true, endpointing: false,
+  diarization: true, maxSpeakers: 4, autoPunct: true,
   noiseSuppression: true, echoCancellation: true, autoGain: false,
 };
 const hadSavedSettings = !!localStorage.getItem(SETTINGS_KEY);
@@ -114,7 +113,6 @@ function applySettingsToUI() {
   els.setDiarization.checked = settings.diarization;
   els.setMaxspeakers.value = settings.maxSpeakers;
   els.setPunct.checked = settings.autoPunct;
-  els.setEndpointing.checked = settings.endpointing;
   els.setNs.checked = settings.noiseSuppression;
   els.setEc.checked = settings.echoCancellation;
   els.setAgc.checked = settings.autoGain;
@@ -124,7 +122,6 @@ function readSettingsFromUI() {
   settings.diarization = els.setDiarization.checked;
   settings.maxSpeakers = Math.max(1, Math.min(8, parseInt(els.setMaxspeakers.value, 10) || 4));
   settings.autoPunct = els.setPunct.checked;
-  settings.endpointing = els.setEndpointing.checked;
   settings.noiseSuppression = els.setNs.checked;
   settings.echoCancellation = els.setEc.checked;
   settings.autoGain = els.setAgc.checked;
@@ -324,11 +321,13 @@ function connectWS() {
   const proto = location.protocol === "https:" ? "wss" : "ws";
   // Per-connection ASR settings ride along as query params; the server merges
   // them over its env defaults for this session only.
+  // Endpointing is intentionally not sent: it's governed server-side by
+  // ASR_ENDPOINTING (kept for a future model with VAD support). The current
+  // model doesn't endpoint, so the client never overrides it.
   const params = new URLSearchParams({
     diarization: settings.diarization ? "1" : "0",
     max_speakers: String(settings.maxSpeakers),
     punct: settings.autoPunct ? "1" : "0",
-    endpointing: settings.endpointing ? "1" : "0",
   });
   const wsurl = `${proto}://${location.host}${BASE}/ws?${params.toString()}`;
   ws = new WebSocket(wsurl);
@@ -735,7 +734,6 @@ fetch(`config`)
       if (typeof cfg.diarization === "boolean") settings.diarization = cfg.diarization;
       if (typeof cfg.max_speakers === "number") settings.maxSpeakers = cfg.max_speakers;
       if (typeof cfg.auto_punct === "boolean") settings.autoPunct = cfg.auto_punct;
-      if (typeof cfg.endpointing === "boolean") settings.endpointing = cfg.endpointing;
       applySettingsToUI();
     }
   })

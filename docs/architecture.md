@@ -256,10 +256,11 @@ All in `static/index.html`; a dark theme defined with CSS variables
     and has a **Run** button. Below: **Save**, a blue **Run all now**, and
     **Reset to server defaults**. Optional admin-token field.
   - **Extras** — per-session **transcription settings** (diarization, expected
-    speakers, punctuation, mic processing, and an Advanced endpointing toggle;
-    saved in `localStorage`, applied on Start via `/ws` query params), plus
-    **Download .md**, **Download transcript only** (raw timestamped lines), and
-    **Save WAV**.
+    speakers, punctuation, and mic processing; saved in `localStorage`, applied
+    on Start via `/ws` query params), plus **Download .md**, **Download
+    transcript only** (raw timestamped lines), and **Save WAV**. Endpointing has
+    no UI toggle — it's governed server-side by `ASR_ENDPOINTING` (kept for a
+    future model with VAD support; the current model doesn't endpoint).
 - **Footer** — elapsed time, word count, live **session count**, the **AI
   activity** dot (shows the model), and **Download .md** / **AI Summary** /
   **Clear**.
