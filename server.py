@@ -601,11 +601,16 @@ class Bridge:
                 if text:
                     await send_json(self.browser, {"type": "interim", "text": text})
             elif etype.endswith("transcription.completed"):
-                # Finalized segment. Split it at per-word speaker changes so a
-                # single utterance spanning two speakers becomes two lines.
+                # Finalized segment. With diarization on, split it at per-word
+                # speaker changes; with it off, ignore any speaker tag the NIM
+                # returns so no "Speaker N" labels leak into the transcript.
                 if self.opts["diarization"]:
                     log.debug("NIM completed (diarization) full event: %s", json.dumps(evt))
-                for speaker, text in _speaker_segments(evt):
+                    segments = _speaker_segments(evt)
+                else:
+                    whole = (evt.get("transcript") or "").strip()
+                    segments = [(None, whole)] if whole else []
+                for speaker, text in segments:
                     if not text:
                         continue
                     if self._t0 is None:
