@@ -240,5 +240,6 @@ docker-entrypoint.sh    # container entrypoint (PORT/TLS)
 deploy/nginx-asr.conf   # WebSocket reverse-proxy for the /asr route
 docs/architecture.md    # architecture / code / UI / deployment guide (also the wiki)
 docs/example-client.html# the simplest complete SDK client (start/stop + transcript)
+docs/example-ptt.html   # push-to-talk SDK client (stream only while held)
 requirements.txt
 ```
