@@ -300,7 +300,11 @@ registerProcessor("pcm-worklet", PCMWorklet);
           }
           this._emit("status", "listening");
         }
-        async stop() {
+        // stop({finalize: false}) skips the server's end-of-meeting analyzers and
+        // the wait for their results — fast teardown for push-to-talk style use.
+        // The tail flush still happens, so the last utterance is transcribed.
+        async stop(opts) {
+          const finalize = !opts || opts.finalize !== false;
           if (!this._running && !this._ws) return;
           this._running = false;
           this._paused = false;
@@ -313,13 +317,15 @@ registerProcessor("pcm-worklet", PCMWorklet);
           if (this._ws && this._ws.readyState === WebSocket.OPEN) {
             this._send({ type: "flush" });
             await new Promise((r) => setTimeout(r, STOP_FLUSH_WAIT_MS));
-            const ended = new Promise((r) => {
-              this._sessionEndResolve = r;
-            });
-            this._send({ type: "stop" });
-            this._emit("status", "finalizing");
-            await Promise.race([ended, new Promise((r) => setTimeout(r, STOP_SESSION_END_MS))]);
-            this._sessionEndResolve = null;
+            if (finalize) {
+              const ended = new Promise((r) => {
+                this._sessionEndResolve = r;
+              });
+              this._send({ type: "stop" });
+              this._emit("status", "finalizing");
+              await Promise.race([ended, new Promise((r) => setTimeout(r, STOP_SESSION_END_MS))]);
+              this._sessionEndResolve = null;
+            }
             try {
               this._ws.close();
             } catch (e) {
@@ -566,7 +572,7 @@ registerProcessor("pcm-worklet", PCMWorklet);
           return new Blob([buf], { type: "audio/wav" });
         }
       }
-      AsrClient.version = "0.2.0";
+      AsrClient.version = "0.3.0";
       return AsrClient;
     });
   }

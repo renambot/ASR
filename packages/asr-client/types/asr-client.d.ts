@@ -110,8 +110,12 @@ export default class AsrClient {
   /** Stop sending audio; keeps the session open (flushes the tail first). */
   pause(): void;
   resume(): void;
-  /** Flush, wait (bounded) for end-of-meeting analyzers, tear down. */
-  stop(): Promise<void>;
+  /**
+   * Flush the tail, wait (bounded) for the proxy's end-of-meeting analyzers,
+   * tear down. Pass {finalize: false} to skip the analyzers and their wait —
+   * fast teardown for push-to-talk style use (the tail is still transcribed).
+   */
+  stop(opts?: { finalize?: boolean }): Promise<void>;
   /** Hard teardown; the instance is unusable afterwards. */
   dispose(): void;
 

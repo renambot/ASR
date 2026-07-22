@@ -89,7 +89,9 @@ ASR/mic options apply on the next `start()`. `configure(partial)` merges options
 
 ## Methods & properties
 
-- `start()` / `pause()` / `resume()` / `stop()` / `dispose()`
+- `start()` / `pause()` / `resume()` / `stop()` / `dispose()` —
+  `stop({finalize: false})` skips the end-of-meeting analyzers and their wait
+  (fast push-to-talk teardown; the tail is still transcribed)
 - `setSpeakerName(id, name)` — also syncs to the proxy so analyzers use it
 - `speakerLabel(id)` — custom name or `"Speaker N"`
 - `transcriptText({timestamps, names})` — composed transcript; with

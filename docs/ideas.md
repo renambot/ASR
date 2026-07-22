@@ -8,8 +8,6 @@ Living list of possible next steps and the reasoning behind settled decisions.
   needs the `@evl` npm scope (or a rename) and a version/release routine.
 - **`client.analyze(prompts)` / `summarize()`** (v1.1) — thin wrappers over
   the existing stateless `/analyze` and `/llm` endpoints for on-demand runs.
-- **`stop({finalize: false})`** — skip the end-of-meeting analyzers for fast
-  teardown (useful for push-to-talk style consumers).
 - **Web Component `<evl-asr>`** — drop-in UI on top of the headless SDK for
   consumers who don't want to build their own.
 - **iframe embed + postMessage bridge** — zero-integration option.
