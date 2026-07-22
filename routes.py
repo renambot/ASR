@@ -1,31 +1,66 @@
 """FastAPI app: WebSocket endpoint, HTTP API, and static hosting."""
 
 import json
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import analyzers
 from analyzers import _validate_analyzers, load_analyzers, save_analyzers
 from bridge import Bridge, send_json
-from config import (ADMIN_TOKEN, ASR_LANGUAGE, ASR_MODEL, AUTO_PUNCT, BASE_PATH,
-                    DIARIZATION, ENDPOINTING, LLM_BASE_URL, LLM_MODEL,
-                    LLM_SYSTEM_PROMPT, MAX_SESSIONS, MAX_SPEAKERS, SAMPLE_RATE,
-                    SDK_DIR, STATIC_DIR, log)
+from config import (ADMIN_TOKEN, ALLOWED_ORIGINS, ASR_LANGUAGE, ASR_MODEL,
+                    AUTO_PUNCT, BASE_PATH, DIARIZATION, ENDPOINTING,
+                    LLM_BASE_URL, LLM_MODEL, LLM_SYSTEM_PROMPT, MAX_SESSIONS,
+                    MAX_SPEAKERS, SAMPLE_RATE, SDK_DIR, STATIC_DIR, log)
 from llm import chain_suffix, llm_chat
 
 app = FastAPI(title="EVL ASR Proxy")
+
+# Cross-origin embedding: pages on the listed origins may call the HTTP API
+# (/config, /llm, /analyze, ...) with the client SDK. Off (empty) by default —
+# then no CORS headers are sent and behavior is unchanged.
+if ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"] if "*" in ALLOWED_ORIGINS else ALLOWED_ORIGINS,
+        allow_methods=["GET", "POST", "PUT"],
+        allow_headers=["Content-Type", "X-Admin-Token"],
+    )
 
 
 # Count of live browser sessions (single event loop, so a plain int is safe).
 _active_sessions = 0
 
 
+def _origin_allowed(ws: WebSocket) -> bool:
+    """WebSocket Origin gate, active only when ALLOWED_ORIGINS is set.
+
+    Browsers always send an Origin header on WS handshakes, so this keeps
+    malicious *pages* from opening ASR sessions cross-origin. Same-host pages
+    are always allowed (a misconfigured list must not break the app the proxy
+    itself serves), and clients without an Origin header (non-browser tools)
+    pass through — they were never subject to browser protections anyway."""
+    if not ALLOWED_ORIGINS:
+        return True
+    origin = ws.headers.get("origin", "")
+    if not origin:
+        return True
+    if "*" in ALLOWED_ORIGINS or origin.rstrip("/") in ALLOWED_ORIGINS:
+        return True
+    return urlparse(origin).netloc == ws.headers.get("host", "")
+
+
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket):
     """One browser connection == one Bridge to the NIM, capped at MAX_SESSIONS."""
     global _active_sessions
+    if not _origin_allowed(ws):
+        log.warning("Rejecting browser: origin %r not allowed", ws.headers.get("origin"))
+        await ws.close(code=1008)  # rejects the handshake (policy violation)
+        return
     await ws.accept()
     if MAX_SESSIONS > 0 and _active_sessions >= MAX_SESSIONS:
         log.warning("Rejecting browser: at capacity (%d/%d)", _active_sessions, MAX_SESSIONS)

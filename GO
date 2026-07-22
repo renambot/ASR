@@ -63,6 +63,11 @@ PORT="8080"
 # must forward the path unchanged (do not strip the prefix).
 export BASE_PATH=""
 
+# Cross-origin embedding: comma-separated origins allowed to use the client
+# SDK from other web apps (CORS on the HTTP API + Origin check on /ws), e.g.
+# "https://app.example.com". "*" = any. Empty = same-origin only (default).
+export ALLOWED_ORIGINS=""
+
 # ---- TLS (serve page over https; needed for mic access off localhost) -----
 # Set both to a file path to enable; leave "" to serve over http.
 SSL_CERT=""

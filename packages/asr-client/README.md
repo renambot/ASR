@@ -94,7 +94,9 @@ ASR/mic options apply on the next `start()`. `configure(partial)` merges options
 
 - **A proxy is required.** Browsers can't talk to the NIM directly; deploy the
   ASR proxy from the main repo and point `serverUrl` at it.
-- Cross-origin embedding needs CORS/origin allowances on the proxy.
+- **Cross-origin embedding:** set `ALLOWED_ORIGINS` on the proxy (e.g.
+  `ALLOWED_ORIGINS="https://app.example.com"`) to allow pages on other origins;
+  it enables CORS on the HTTP API and an Origin check on the WebSocket.
 - `stop()` waits (bounded) for the proxy's end-of-meeting analyzers so their
   results arrive before the socket closes.
 

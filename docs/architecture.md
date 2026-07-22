@@ -197,6 +197,13 @@ The public `GET /config` returns only non-secret fields the client needs:
 { "sample_rate", "language", "model", "llm": <bool>, "llm_model", "sessions" }
 ```
 
+**Cross-origin embedding:** by default the proxy serves same-origin browsers
+only (no CORS headers). Setting `ALLOWED_ORIGINS` (comma-separated, or `*`)
+adds CORS to the HTTP API **and** an `Origin` gate on `/ws` for pages using the
+client SDK from other web apps; same-host pages and non-browser clients always
+pass. Note the WS gate is a *tightening*: without it, any page can open `/ws`
+(WebSockets aren't subject to the same-origin policy).
+
 **Information disclosure to note:** `/config` is unauthenticated, so any visitor
 who can load the page can see the **model names** (`model` = ASR model,
 `llm_model` = the analyzer/AI-Summary model), the language, the sample rate, and

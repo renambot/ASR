@@ -119,6 +119,7 @@ the defaults.
 | `ANALYZER_MIN_CHARS` | `40` | the periodic analyzers wait until the transcript has at least this many characters before running (avoids firing on an empty meeting) |
 | `ADMIN_TOKEN` | *(empty)* | shared secret for the Admin tab / `/admin/analyzers` endpoints; empty = open |
 | `BASE_PATH` | *(empty)* | serve the whole app (page, static, `/ws`, `/config`, `/llm`, `/admin`) under a sub-path, e.g. `/asr`, for reverse-proxy deployments; empty = root. The proxy must forward the path unchanged (do not strip the prefix) |
+| `ALLOWED_ORIGINS` | *(empty)* | comma-separated origins allowed to embed live ASR via the client SDK from other web apps (adds CORS to the HTTP API and an Origin check on `/ws`); `*` = any; empty = same-origin only |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
 | `DEBUG_AUDIO_DIR` | *(empty)* | if set, write forwarded PCM to a WAV there |
 
