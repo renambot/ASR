@@ -191,6 +191,8 @@
       width: 64px; margin-left: auto; font: inherit; font-size: 14px; padding: 4px 6px;
       border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
     }
+    #settings-reset { font-size: 13px; color: var(--muted); }
+    #settings-reset:hover { color: var(--text); }
     @media (max-width: 760px) {
       .content { flex-direction: column; }
       aside#speakers {
@@ -320,6 +322,7 @@
           <label class="set-row"><input type="checkbox" id="set-ec" /> Echo cancellation</label>
           <label class="set-row"><input type="checkbox" id="set-agc" /> Auto gain</label>
         </fieldset>
+        <button id="settings-reset" title="Reset the transcription and microphone settings to the server defaults">Reset transcription settings</button>
         <button id="download" title="Full meeting export: title, date, summary, analyses, transcript">Download Markdown</button>
         <button id="download-transcript" title="Raw transcript with timestamps — no summary or analysis">Download transcript only</button>
         <button id="savewav" title="Download the captured audio as a WAV for debugging">Save WAV</button>

@@ -64,6 +64,7 @@ const els = {
   setNs: document.getElementById("set-ns"),
   setEc: document.getElementById("set-ec"),
   setAgc: document.getElementById("set-agc"),
+  settingsReset: document.getElementById("settings-reset"),
 };
 
 // Show/hide the banner used for capacity and similar user-facing messages.
@@ -130,6 +131,24 @@ function readSettingsFromUI() {
 }
 applySettingsToUI();
 els.settings.addEventListener("change", readSettingsFromUI);
+
+// Reset transcription + mic settings to defaults: discard this browser's saved
+// overrides, restore mic defaults, and re-seed the ASR options from the server.
+async function resetSettings() {
+  try { localStorage.removeItem(SETTINGS_KEY); } catch {}
+  settings.noiseSuppression = true;
+  settings.echoCancellation = true;
+  settings.autoGain = false;
+  settings.diarization = true; settings.maxSpeakers = 4; settings.autoPunct = true;
+  try {
+    const cfg = await fetch(`config`).then((r) => r.json());
+    if (typeof cfg.diarization === "boolean") settings.diarization = cfg.diarization;
+    if (typeof cfg.max_speakers === "number") settings.maxSpeakers = cfg.max_speakers;
+    if (typeof cfg.auto_punct === "boolean") settings.autoPunct = cfg.auto_punct;
+  } catch { /* keep the hardcoded fallbacks */ }
+  applySettingsToUI();
+}
+els.settingsReset.onclick = resetSettings;
 
 // --- Speaker naming (diarization) ---
 // Custom names entered in the side panel, keyed by the raw speaker id the NIM
@@ -468,6 +487,7 @@ async function start() {
   els.pause.disabled = false;
   els.mic.disabled = true;
   els.settings.disabled = true; // settings apply per session; lock during one
+  els.settingsReset.disabled = true;
   startTime = Date.now() - 0;
   if (!elapsedTimer) {
     elapsedTimer = setInterval(() => {
@@ -487,6 +507,7 @@ async function stop() {
   els.pause.disabled = true;
   els.mic.disabled = false;
   els.settings.disabled = false;
+  els.settingsReset.disabled = false;
 
   // Stop capturing first so no new audio is queued.
   if (workletNode) { workletNode.port.onmessage = null; workletNode.disconnect(); workletNode = null; }
