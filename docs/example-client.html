@@ -25,6 +25,9 @@
     input, select { flex: 1; padding: 8px; font: inherit; min-width: 0; }
     button { padding: 8px 20px; font: inherit; cursor: pointer; }
     #status { color: #666; font-size: 14px; }
+    /* Push-to-talk: no text selection / touch scrolling while held. */
+    #ptt { touch-action: none; user-select: none; -webkit-user-select: none; }
+    #ptt.rec { background: #c92a2a; color: #fff; }
     #transcript {
       border: 1px solid #ccc; border-radius: 6px; padding: 12px; min-height: 200px;
       white-space: pre-wrap; line-height: 1.6;
@@ -45,6 +48,7 @@
     <label for="mic">Mic</label>
     <select id="mic"></select>
     <button id="toggle">Start</button>
+    <button id="ptt" title="Push-to-talk: streams audio only while held">🎙 Hold to talk</button>
     <span id="status">idle</span>
   </div>
 
@@ -119,6 +123,51 @@
       catch (e) { statusEl.textContent = "error: " + e.message; asr = null; micSel.disabled = false; }
       finally { toggleBtn.disabled = false; }
     };
+
+    // ---- Push-to-talk: stream audio only while the button is held ----------
+    // First press starts a session (mic + socket — takes a moment); releasing
+    // pauses it. pause() flushes, so what you said while holding gets
+    // transcribed. The session stays open between presses (Stop ends it).
+    const pttBtn = document.getElementById("ptt");
+    let pttHeld = false;
+    let pttStarting = false;
+
+    async function pttDown(e) {
+      e.preventDefault();
+      pttHeld = true;
+      if (pttStarting) return;
+      if (asr && asr.running && !asr.paused) return; // already streaming via Start
+      try {
+        if (asr && asr.running) {
+          asr.resume();                    // instant on later presses
+        } else {
+          pttStarting = true;
+          await start();                   // first press: opens mic + socket
+          pttStarting = false;
+          if (!pttHeld) { asr.pause(); return; }  // released while connecting
+        }
+        pttBtn.classList.add("rec");
+      } catch (err) {
+        pttStarting = false;
+        statusEl.textContent = "error: " + err.message;
+      }
+    }
+
+    function pttUp() {
+      if (!pttHeld) return;
+      pttHeld = false;
+      // Only pause if this press was streaming (not a no-op during Start mode).
+      if (pttBtn.classList.contains("rec") && asr && asr.running && !asr.paused) {
+        asr.pause();
+      }
+      pttBtn.classList.remove("rec");
+    }
+
+    pttBtn.addEventListener("pointerdown", pttDown);
+    pttBtn.addEventListener("pointerup", pttUp);
+    pttBtn.addEventListener("pointercancel", pttUp);
+    pttBtn.addEventListener("pointerleave", pttUp);
+    pttBtn.addEventListener("contextmenu", (e) => e.preventDefault());
 
     loadMics();   // labels appear once the first session grants permission
   </script>
