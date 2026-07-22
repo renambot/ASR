@@ -6,8 +6,9 @@
      releasing stops it — the tail is flushed and transcribed, the proxy runs
      any end-of-meeting analyzers, and the session closes.
 
-     Load the SDK either from your proxy (it serves /sdk/asr-client.js) or,
-     as here, straight from the repo checkout.
+     The SDK is loaded from the npm CDN, so this page works from anywhere.
+     Alternatives: your proxy serves it at /sdk/asr-client.js, or use the
+     repo checkout at ../packages/asr-client/src/asr-client.js.
 
      If this page is served from a DIFFERENT origin than the proxy, set
      ALLOWED_ORIGINS on the proxy (e.g. ALLOWED_ORIGINS="https://your-app")
@@ -54,9 +55,9 @@
 
   <div id="transcript"><span id="final"></span><span id="interim"></span></div>
 
-  <!-- The SDK: one file, no dependencies. From a deployed proxy use
-       <script src="https://your-host/speech/sdk/asr-client.js"></script> -->
-  <script src="../packages/asr-client/src/asr-client.js"></script>
+  <!-- The SDK: one file, no dependencies (@evluic/asr-client on npm).
+       Also served by a deployed proxy at /sdk/asr-client.js. -->
+  <script src="https://cdn.jsdelivr.net/npm/@evluic/asr-client@0.3/dist/asr-client.min.js"></script>
   <script>
     const pttBtn = document.getElementById("ptt");
     const statusEl = document.getElementById("status");
