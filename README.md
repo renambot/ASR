@@ -222,12 +222,15 @@ nim.py                  # NIM session config + transcript-event parsing
 llm.py                  # LLM chat call + shared prompt helpers
 bridge.py               # per-client browser<->NIM bridge (the core class)
 routes.py               # FastAPI endpoints, static hosting, BASE_PATH mount
+packages/asr-client/    # @evl/asr-client — headless browser SDK (BSD-3):
+                        #   mic capture + /ws protocol as events; served at
+                        #   /sdk/asr-client.js; see its README for the API
 static/index.html       # UI markup
 static/style.css        # all styles (dark + light themes)
-static/js/              # front-end, split by concern and loaded in order:
-                        #   core, devices, transcript, speakers, ws, session,
-                        #   exports, ai, panels, admin, main
-static/pcm-worklet.js   # 16 kHz Int16 PCM resampler (audio thread)
+static/js/              # the app UI (reference consumer of the SDK), split by
+                        #   concern and loaded in order: core, devices,
+                        #   transcript, speakers, ws, session, exports, ai,
+                        #   panels, admin, main
 analyzers.json          # default background-analyzer prompts and schedules
 Dockerfile              # container image
 docker-compose.yml      # containerized deployment (reads .env)
