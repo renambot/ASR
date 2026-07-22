@@ -4,11 +4,40 @@
   "description": "Headless browser client for the EVL ASR proxy: live microphone speech-to-text with speaker diarization, as events.",
   "license": "BSD-3-Clause",
   "main": "src/asr-client.js",
-  "files": ["src", "README.md"],
+  "module": "dist/asr-client.mjs",
+  "types": "types/asr-client.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/asr-client.d.ts",
+      "import": "./dist/asr-client.mjs",
+      "require": "./src/asr-client.js",
+      "default": "./src/asr-client.js"
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/asr-client.js --bundle --format=esm --outfile=dist/asr-client.mjs && esbuild src/asr-client.js --minify --outfile=dist/asr-client.min.js"
+  },
+  "files": [
+    "src",
+    "dist",
+    "types",
+    "README.md"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/renambot/ASR.git",
     "directory": "packages/asr-client"
   },
-  "keywords": ["asr", "speech-to-text", "transcription", "diarization", "nvidia", "riva", "websocket"]
+  "keywords": [
+    "asr",
+    "speech-to-text",
+    "transcription",
+    "diarization",
+    "nvidia",
+    "riva",
+    "websocket"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
 }

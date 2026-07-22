@@ -12,3 +12,6 @@ __pycache__/
 # Local dev secrets / overrides (never commit real credentials)
 GO.local
 .env
+
+# Node (SDK build tooling)
+node_modules/

@@ -10,13 +10,23 @@ LLM analyzers) lives in the proxy; this client captures the mic, streams
 
 ## Install / load
 
-Classic script (sets `window.AsrClient`; also served by the proxy at `/sdk/asr-client.js`):
+Classic script (sets `window.AsrClient`; also served by the proxy at `/sdk/asr-client.js`,
+or use the minified `dist/asr-client.min.js`):
 
 ```html
 <script src="https://your-proxy-host/speech/sdk/asr-client.js"></script>
 ```
 
-CommonJS / bundlers: `const AsrClient = require("@evl/asr-client");`
+ES modules / bundlers (TypeScript definitions included):
+
+```js
+import AsrClient from "@evl/asr-client";   // dist/asr-client.mjs
+```
+
+CommonJS: `const AsrClient = require("@evl/asr-client");`
+
+To rebuild `dist/` after editing the source: `npm install && npm run build`
+(esbuild; the `src/` file itself needs no build step).
 
 ## Quick start
 
