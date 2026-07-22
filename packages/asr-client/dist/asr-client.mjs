@@ -94,8 +94,12 @@ registerProcessor("pcm-worklet", PCMWorklet);
         // auto-reconnect the socket while running
         captureAudio: false,
         // keep the streamed PCM so getWav() works
-        workletUrl: void 0
+        workletUrl: void 0,
         // override the inlined worklet (CSP without blob:)
+        // Opt-in: run the proxy's background analyzers (topics, summaries, ...)
+        // for this session. Off by default so embedded pages don't silently
+        // trigger server-side LLM calls; results arrive as "analysis" events.
+        analyzers: false
       };
       const STOP_FLUSH_WAIT_MS = 1200;
       const STOP_SESSION_END_MS = 12e4;
@@ -197,6 +201,7 @@ registerProcessor("pcm-worklet", PCMWorklet);
           if (o.diarization !== void 0) params.set("diarization", o.diarization ? "1" : "0");
           if (o.maxSpeakers !== void 0) params.set("max_speakers", String(o.maxSpeakers));
           if (o.punctuation !== void 0) params.set("punct", o.punctuation ? "1" : "0");
+          params.set("analyzers", o.analyzers ? "1" : "0");
           const qs = params.toString();
           const suffix = "/ws" + (qs ? "?" + qs : "");
           if (/^https?:\/\//i.test(base)) return base.replace(/^http/i, "ws") + suffix;
@@ -561,7 +566,7 @@ registerProcessor("pcm-worklet", PCMWorklet);
           return new Blob([buf], { type: "audio/wav" });
         }
       }
-      AsrClient.version = "0.1.0";
+      AsrClient.version = "0.2.0";
       return AsrClient;
     });
   }

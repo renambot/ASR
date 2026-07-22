@@ -159,6 +159,8 @@ function settingsToOptions() {
 }
 
 const asr = new AsrClient(Object.assign(
-  { serverUrl: BASE, captureAudio: true },   // captureAudio: the Save WAV button
+  // captureAudio: the Save WAV button. analyzers: the app is the full
+  // experience, so it opts in (the SDK default is off for embedders).
+  { serverUrl: BASE, captureAudio: true, analyzers: true },
   settingsToOptions(),
 ));

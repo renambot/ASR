@@ -71,6 +71,7 @@ asr.configure({ deviceId: mics[1].deviceId });    // applies on the next start()
 | `reconnect` | `true` | Auto-reconnect while running |
 | `captureAudio` | `false` | Keep streamed PCM so `getWav()` works (~10 min cap) |
 | `workletUrl` | inlined | Override if your CSP forbids `blob:` scripts |
+| `analyzers` | `false` | **Opt in** to the proxy's background analyzers (topics, summaries, …) for this session; results arrive as `analysis` events. Off by default so your page doesn't silently trigger server-side LLM calls |
 
 ASR/mic options apply on the next `start()`. `configure(partial)` merges options.
 

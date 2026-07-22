@@ -1,6 +1,6 @@
 {
   "name": "@evl/asr-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Headless browser client for the EVL ASR proxy: live microphone speech-to-text with speaker diarization, as events.",
   "license": "BSD-3-Clause",
   "main": "src/asr-client.js",

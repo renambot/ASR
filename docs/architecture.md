@@ -151,7 +151,7 @@ basis.
 | `/` | GET | Serves `index.html`, injecting `window.__BASE__` and prefixing static URLs |
 | `/static/*` | GET | Static assets |
 | `/config` | GET | Non-secret client config + per-connection ASR **defaults**: `{sample_rate, language, model, llm, llm_model, sessions, diarization, max_speakers, auto_punct, endpointing}` |
-| `/ws` | WS | The audio/transcript bridge. Accepts per-connection ASR overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=` — merged over the env defaults by `session_opts()` for that session only |
+| `/ws` | WS | The audio/transcript bridge. Accepts per-connection overrides as query params — `?diarization=&max_speakers=&punct=&endpointing=&analyzers=` — merged over the env defaults by `session_opts()` for that session only. `analyzers` defaults on when absent; the SDK sends `analyzers=0` unless the consumer opts in |
 | `/llm` | POST | Run the transcript through the LLM. Body `{text, analyzer?, instruction?}`; `analyzer` (name or id) uses that analyzer's prompt (drives the AI Summary button → "Meeting Summary") |
 | `/analyze` | POST | **Stateless** run of analyzer prompts. Body `{text, analyzers:[{id,name,prompt,mode}]}` → `{results:[{id,name,result|error}]}`. Powers Admin "Run now" / "Run all" so they work outside a live session |
 | `/admin/analyzers` | GET/PUT | Read / replace the analyzer registry (`X-Admin-Token` if `ADMIN_TOKEN` set) |

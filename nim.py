@@ -42,6 +42,11 @@ def session_opts(qp) -> dict:
         "max_speakers": max(1, min(8, max_sp)),
         "auto_punct": _bool_param(qp, "punct", AUTO_PUNCT),
         "endpointing": _bool_param(qp, "endpointing", ENDPOINTING),
+        # Background analyzers for this session. Default on when the param is
+        # absent (the app and older pages keep their behavior); the SDK sends
+        # analyzers=0 unless the consumer opts in, so embedded pages don't
+        # silently trigger server-side LLM calls.
+        "analyzers": _bool_param(qp, "analyzers", True),
     }
 
 

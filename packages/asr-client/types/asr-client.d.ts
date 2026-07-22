@@ -25,6 +25,12 @@ export interface AsrClientOptions {
   captureAudio?: boolean;
   /** Override the inlined AudioWorklet URL (CSP without blob:). */
   workletUrl?: string;
+  /**
+   * Opt in to the proxy's background analyzers (topics, summaries, ...) for
+   * this session; results arrive as "analysis" events. Default false so
+   * embedded pages don't silently trigger server-side LLM calls.
+   */
+  analyzers?: boolean;
 }
 
 /** A finalized transcript segment. */
