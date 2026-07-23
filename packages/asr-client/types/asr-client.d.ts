@@ -60,6 +60,30 @@ export interface Microphone {
   label: string;
 }
 
+/** A prompt for analyze(). */
+export interface AnalyzePrompt {
+  prompt: string;
+  name?: string;
+  id?: string;
+  /** Feed the previous prompt's output in as extra context. */
+  chain?: boolean;
+}
+
+/** One analyze() result; failed prompts carry `error` instead of `result`. */
+export interface AnalyzeResult {
+  id: string;
+  name: string;
+  result?: string;
+  error?: string;
+}
+
+export interface SummarizeResult {
+  result: string;
+  model: string;
+  /** Present when a server-configured analyzer's prompt was used. */
+  analyzer?: string;
+}
+
 /** The proxy's GET /config payload. */
 export interface ServerInfo {
   sample_rate: number;
@@ -139,6 +163,23 @@ export default class AsrClient {
 
   /** The proxy's /config. */
   serverInfo(): Promise<ServerInfo>;
+
+  /**
+   * On-demand analysis of the transcript (or opts.text) via the proxy's
+   * stateless /analyze endpoint. Works during, paused, or after a session;
+   * per-prompt errors come back in the results instead of throwing. Fires
+   * the ai_running event around the call.
+   */
+  analyze(prompts: string | AnalyzePrompt | AnalyzePrompt[],
+          opts?: { text?: string }): Promise<AnalyzeResult[]>;
+
+  /**
+   * One-shot summary of the transcript (or opts.text) via /llm. Uses the
+   * proxy's default prompt unless {analyzer} names a server-configured
+   * analyzer or {instruction} overrides the prompt.
+   */
+  summarize(opts?: { analyzer?: string; instruction?: string; text?: string }):
+    Promise<SummarizeResult>;
 
   readonly running: boolean;
   readonly paused: boolean;

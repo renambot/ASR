@@ -46,6 +46,7 @@
     <label for="mic">Mic</label>
     <select id="mic"></select>
     <button id="toggle">Start</button>
+    <button id="summarize" title="One-shot LLM summary of the transcript (needs an LLM on the proxy)">Summarize</button>
     <span id="status">idle</span>
   </div>
 
@@ -53,7 +54,7 @@
 
   <!-- The SDK: one file, no dependencies (@evluic/asr-client on npm).
        Also served by a deployed proxy at /sdk/asr-client.js. -->
-  <script src="https://cdn.jsdelivr.net/npm/@evluic/asr-client@0.3/dist/asr-client.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@evluic/asr-client@0.4/dist/asr-client.min.js"></script>
   <script>
     const toggleBtn = document.getElementById("toggle");
     const statusEl = document.getElementById("status");
@@ -109,7 +110,7 @@
     async function stop() {
       statusEl.textContent = "finalizing…";
       await asr.stop();    // flushes the tail, then closes the session
-      asr = null;
+      // Keep `asr` around: its transcript survives, so Summarize still works.
       toggleBtn.textContent = "Start";
       micSel.disabled = false;
     }
@@ -119,6 +120,26 @@
       try { await (asr && asr.running ? stop() : start()); }
       catch (e) { statusEl.textContent = "error: " + e.message; asr = null; micSel.disabled = false; }
       finally { toggleBtn.disabled = false; }
+    };
+
+    // One-shot LLM summary of the transcript so far (works after Stop too).
+    const sumBtn = document.getElementById("summarize");
+    sumBtn.onclick = async () => {
+      if (!asr || asr.segments.length === 0) {
+        statusEl.textContent = "nothing to summarize";
+        return;
+      }
+      sumBtn.disabled = true;
+      statusEl.textContent = "summarizing…";
+      try {
+        const s = await asr.summarize();
+        finalEl.textContent += "\n— Summary (" + (s.model || "LLM") + ") —\n" + s.result + "\n\n";
+        statusEl.textContent = asr.running ? "listening" : "idle";
+      } catch (e) {
+        statusEl.textContent = "error: " + e.message;
+      } finally {
+        sumBtn.disabled = false;
+      }
     };
 
     loadMics();   // labels appear once the first session grants permission

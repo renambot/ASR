@@ -58,6 +58,10 @@ asr.pause();           // stop sending audio, keep the session open
 asr.resume();
 await asr.stop();      // flush, let end-of-meeting analyzers run, tear down
 
+// On-demand LLM calls over the transcript (work after stop() too):
+const { result } = await asr.summarize();
+const findings = await asr.analyze("List the action items as bullets");
+
 // Switch mics between sessions:
 asr.configure({ deviceId: mics[1].deviceId });    // applies on the next start()
 ```
@@ -104,6 +108,15 @@ ASR/mic options apply on the next `start()`. `configure(partial)` merges options
   `timestamps: true` each segment becomes `[MM:SS] Label: text`
 - `clear({names})` — reset the transcript (and optionally the speaker names)
 - `getWav()` — `Blob` of the streamed audio (`captureAudio: true`), else `null`
+- `analyze(prompts, {text?})` — on-demand analysis via the proxy's stateless
+  `/analyze`: a string, one `{prompt, name?, chain?}` object, or a list
+  (`chain: true` feeds the previous prompt's output in as context). Defaults
+  to this client's timestamped transcript; works during, paused, or after a
+  session. Returns `[{id, name, result|error}]`.
+- `summarize({analyzer?, instruction?, text?})` — one-shot summary via `/llm`
+  (the proxy's default prompt, a server-configured analyzer by name, or a
+  custom instruction). Both methods fire the `ai_running` event and require
+  an LLM configured on the proxy.
 - `serverInfo()` — the proxy's `/config` (defaults, LLM availability, sessions)
 - `AsrClient.listMicrophones()` — `[{deviceId, label}]`
 - `segments` (read-only), `interim`, `running`, `paused`, `elapsedMs`,

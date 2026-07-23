@@ -218,6 +218,62 @@ registerProcessor("pcm-worklet", PCMWorklet);
           const devices = await navigator.mediaDevices.enumerateDevices();
           return devices.filter((d) => d.kind === "audioinput").map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Microphone ${i + 1}` }));
         }
+        // ---- on-demand analysis ---------------------------------------------------
+        // Stateless HTTP calls to the proxy's LLM endpoints: they work during,
+        // paused, or after a session — or with no session at all when `text` is
+        // given. Orthogonal to the `analyzers` option (which governs the proxy's
+        // background/scheduled runs); nothing here fires without an explicit call.
+        // The input both methods analyze: caller-supplied text, or this client's
+        // transcript rendered with timestamps + names (same as the app's Run now).
+        _analysisInput(text) {
+          const t = String(text !== void 0 ? text : this.transcriptText({ timestamps: true })).trim();
+          if (!t) throw new Error("AsrClient: nothing to analyze (no transcript and no text given)");
+          return t;
+        }
+        // POST JSON to the proxy, surfacing its {error} on failure and driving the
+        // ai_running event so activity indicators cover on-demand calls too.
+        async _post(path, body) {
+          this._emit("ai_running", true);
+          try {
+            const resp = await fetch(this._httpUrl(path), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body)
+            });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+            return data;
+          } finally {
+            this._emit("ai_running", false);
+          }
+        }
+        // Run one or more prompts over the transcript (or opts.text). Accepts a
+        // string, one {prompt, name?, id?, chain?} object, or a list; {chain: true}
+        // feeds the previous prompt's output in as extra context. Returns
+        // [{id, name, result|error}, ...] — per-prompt errors don't throw.
+        async analyze(prompts, opts) {
+          const raw = typeof prompts === "string" ? [{ prompt: prompts }] : Array.isArray(prompts) ? prompts : [prompts];
+          const list = raw.map((p, i) => ({
+            id: String(p.id || p.name || `prompt-${i + 1}`),
+            name: String(p.name || p.id || `Prompt ${i + 1}`),
+            prompt: String(p.prompt || ""),
+            mode: p.chain ? "chain" : "interval"
+          }));
+          const text = this._analysisInput(opts && opts.text);
+          const data = await this._post("/analyze", { text, analyzers: list });
+          return data.results || [];
+        }
+        // One-shot summary of the transcript (or opts.text). By default the proxy
+        // uses its configured default prompt; pass {analyzer: "<name or id>"} to
+        // run a server-configured analyzer's prompt, or {instruction} to override.
+        async summarize(opts) {
+          const o = opts || {};
+          const body = { text: this._analysisInput(o.text) };
+          if (o.analyzer) body.analyzer = o.analyzer;
+          if (o.instruction) body.instruction = o.instruction;
+          const data = await this._post("/llm", body);
+          return { result: data.result, model: data.model || "", analyzer: data.analyzer };
+        }
         // ---- lifecycle ----------------------------------------------------------
         async start() {
           if (this._disposed) throw new Error("AsrClient: disposed");
@@ -572,7 +628,7 @@ registerProcessor("pcm-worklet", PCMWorklet);
           return new Blob([buf], { type: "audio/wav" });
         }
       }
-      AsrClient.version = "0.3.0";
+      AsrClient.version = "0.4.0";
       return AsrClient;
     });
   }
