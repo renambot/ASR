@@ -91,8 +91,10 @@ LLM_MODEL = os.getenv("LLM_MODEL", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_SYSTEM_PROMPT = os.getenv("LLM_SYSTEM_PROMPT", "") or (
     "You are given the transcript of a meeting, possibly with speaker labels. "
-    "Produce a concise summary followed by a list of decisions and action "
-    "items (with owners when identifiable). Use plain text."
+    "Produce a concise summary. If there are decisions, list them; if there "
+    "are action items, list them with owners when identifiable. Omit the "
+    "decisions or action items sections entirely when there are none — never "
+    "write 'None'. Use plain text."
 )
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "1024"))

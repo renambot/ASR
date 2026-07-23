@@ -26,7 +26,7 @@
   {
     "id": "final-summary",
     "name": "Meeting Summary",
-    "prompt": "The meeting has just ended. You are given its full transcript, possibly with speaker labels. Write a concise summary, then list decisions and action items with owners when identifiable. Plain text only.",
+    "prompt": "The meeting has just ended. You are given its full transcript, possibly with speaker labels. Write a concise summary. If there are decisions, list them; if there are action items, list them with owners when identifiable. Omit the decisions or action items sections entirely when there are none — never write 'None'. Plain text only.",
     "mode": "on_stop",
     "interval_min": 5,
     "enabled": true
