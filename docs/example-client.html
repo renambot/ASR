@@ -83,16 +83,15 @@
       asr = new AsrClient({
         serverUrl: document.getElementById("server").value.trim(),
         deviceId: micSel.value || undefined,   // undefined = system default
-        diarization: true,   // label who is talking (server must support it)
+        diarization: false,  // no speaker labels; keep the example simple
       });
 
       // Live hypothesis: replace-style grey text while you speak.
       asr.on("interim", (text) => { interimEl.textContent = " " + text; });
 
-      // Finalized segment: append a line ("Speaker N: text" when diarized).
+      // Finalized segment: append it as a line.
       asr.on("segment", (seg) => {
-        const label = asr.speakerLabel(seg.speaker);
-        finalEl.textContent += (label ? label + ": " : "") + seg.text + "\n";
+        finalEl.textContent += seg.text + "\n";
         interimEl.textContent = "";
       });
 
@@ -122,7 +121,12 @@
       finally { toggleBtn.disabled = false; }
     };
 
-    // One-shot LLM summary of the transcript so far (works after Stop too).
+    // One-shot LLM summary of the transcript so far (works after Stop too),
+    // using a custom prompt. Call asr.summarize() with no options to use the
+    // proxy's default prompt instead, or asr.analyze("...") for ad-hoc prompts.
+    const SUMMARY_PROMPT =
+      "Summarize this conversation in at most three short bullet points, " +
+      "then one line naming the overall topic. Plain text only.";
     const sumBtn = document.getElementById("summarize");
     sumBtn.onclick = async () => {
       if (!asr || asr.segments.length === 0) {
@@ -132,7 +136,7 @@
       sumBtn.disabled = true;
       statusEl.textContent = "summarizing…";
       try {
-        const s = await asr.summarize();
+        const s = await asr.summarize({ instruction: SUMMARY_PROMPT });
         finalEl.textContent += "\n— Summary (" + (s.model || "LLM") + ") —\n" + s.result + "\n\n";
         statusEl.textContent = asr.running ? "listening" : "idle";
       } catch (e) {
