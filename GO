@@ -29,6 +29,12 @@ export MAX_SESSIONS="20"             # max simultaneous browser sessions (0 = un
 export ANALYZERS_CONFIG=""           # analyzer prompts JSON ("" = ./analyzers.json)
 export ADMIN_TOKEN=""                # protects the Admin tab endpoints ("" = open)
 
+# Login page: set BOTH to require a username/password for the whole app
+# (page, API, and microphone WebSocket). "" = no login. Put real values in
+# GO.local, not here. AUTH_TTL_HOURS = how long a login lasts (default 168).
+export AUTH_USERNAME=""
+export AUTH_PASSWORD=""
+
 # Speaker diarization (label who is speaking). Needs the sortformer model.
 export ASR_DIARIZATION="true"
 export ASR_MAX_SPEAKERS="4"

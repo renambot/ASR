@@ -118,6 +118,8 @@ the defaults.
 | `ANALYZERS_CONFIG` | `./analyzers.json` | JSON file with the default background analyzer prompts (max 5). Each runs on a schedule chosen in the Admin tab: every N minutes, chained after the previous prompt (receiving its output as context), or once when the recording stops |
 | `ANALYZER_MIN_CHARS` | `40` | the periodic analyzers wait until the transcript has at least this many characters before running (avoids firing on an empty meeting) |
 | `ADMIN_TOKEN` | *(empty)* | shared secret for the Admin tab / `/admin/analyzers` endpoints; empty = open |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | *(empty)* | set **both** to put the whole app (page, HTTP API, `/ws`) behind a login page; empty = no login. A successful login sets a signed, expiring HttpOnly cookie and adds a **Log out** button to the header |
+| `AUTH_TTL_HOURS` | `168` | how long a login lasts (7 days). Changing the credentials invalidates all existing logins |
 | `BASE_PATH` | *(empty)* | serve the whole app (page, static, `/ws`, `/config`, `/llm`, `/admin`) under a sub-path, e.g. `/asr`, for reverse-proxy deployments; empty = root. The proxy must forward the path unchanged (do not strip the prefix) |
 | `ALLOWED_ORIGINS` | *(empty)* | comma-separated origins allowed to embed live ASR via the client SDK from other web apps (adds CORS to the HTTP API and an Origin check on `/ws`); `*` = any; empty = same-origin only |
 | `DEBUG` | `false` | verbose per-frame / per-event logging |
@@ -223,10 +225,12 @@ nim.py                  # NIM session config + transcript-event parsing
 llm.py                  # LLM chat call + shared prompt helpers
 bridge.py               # per-client browser<->NIM bridge (the core class)
 routes.py               # FastAPI endpoints, static hosting, BASE_PATH mount
+auth.py                 # optional login: credential check + signed cookie
 packages/asr-client/    # @evluic/asr-client — headless browser SDK (BSD-3):
                         #   mic capture + /ws protocol as events; served at
                         #   /sdk/asr-client.js; see its README for the API
 static/index.html       # UI markup
+static/login.html       # login page (served at /login when auth is enabled)
 static/style.css        # all styles (dark + light themes)
 static/js/              # the app UI (reference consumer of the SDK), split by
                         #   concern and loaded in order: core, devices,

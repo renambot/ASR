@@ -111,6 +111,13 @@ ANALYZERS_CONFIG = os.getenv("ANALYZERS_CONFIG", "") or str(
 # Optional shared secret for the admin endpoints (sent as X-Admin-Token).
 # Empty = admin endpoints are open; fine on a trusted LAN, set it otherwise.
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
+
+# Optional login page for the whole app (page, HTTP API, and /ws): set BOTH
+# to require a username/password; leave empty (default) for no login. See
+# auth.py — sessions are signed cookies that expire after AUTH_TTL_HOURS.
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "")
+AUTH_TTL_HOURS = float(os.getenv("AUTH_TTL_HOURS", "168"))  # default 7 days
 ANALYZER_TICK_SEC = float(os.getenv("ANALYZER_TICK_SEC", "5"))
 # Don't run the periodic analyzers until the transcript has at least this many
 # non-whitespace characters, so they don't fire on an empty/near-empty meeting.

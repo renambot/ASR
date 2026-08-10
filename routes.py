@@ -1,7 +1,7 @@
 """FastAPI app: WebSocket endpoint, HTTP API, and static hosting."""
 
 import json
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import analyzers
+import auth
 from analyzers import _validate_analyzers, load_analyzers, save_analyzers
 from bridge import Bridge, send_json
 from config import (ADMIN_TOKEN, ALLOWED_ORIGINS, ASR_LANGUAGE, ASR_MODEL,
@@ -35,6 +36,88 @@ if ALLOWED_ORIGINS:
 _active_sessions = 0
 
 
+# ---------------------------------------------------------------------------
+# Optional login (see auth.py). Static assets and the SDK stay public — no
+# secrets there, and the login page itself needs the CSS. Everything else
+# (the page, /config, /llm, /analyze, /admin/*, and /ws below) requires the
+# signed cookie when AUTH_USERNAME/AUTH_PASSWORD are configured.
+# ---------------------------------------------------------------------------
+_PUBLIC_PATHS = ("/login", "/logout")  # logout must work with an expired cookie
+_PUBLIC_PREFIXES = ("/static/", "/sdk/")
+# Cookie scoped to the sub-path so co-hosted apps don't clash on the name.
+_COOKIE_PATH = f"{BASE_PATH}/" if BASE_PATH else "/"
+
+
+def _is_https(request: Request) -> bool:
+    """Secure-cookie decision; honors the reverse proxy's forwarded proto."""
+    return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
+@app.middleware("http")
+async def _require_login(request: Request, call_next):
+    if not auth.enabled():
+        return await call_next(request)
+    # Under a BASE_PATH mount, scope["path"] keeps the full path and the
+    # prefix lands in root_path — strip it so the allowlist matches.
+    path = request.scope["path"]
+    root = request.scope.get("root_path", "")
+    if root and path.startswith(root):
+        path = path[len(root):] or "/"
+    if path in _PUBLIC_PATHS or path.startswith(_PUBLIC_PREFIXES):
+        return await call_next(request)
+    if auth.token_valid(request.cookies.get(auth.COOKIE_NAME, "")):
+        return await call_next(request)
+    if path == "/":  # browser navigation -> show the login page
+        return RedirectResponse(url="login")
+    return JSONResponse({"error": "Login required."}, status_code=401)
+
+
+def _login_page(error: str = "") -> HTMLResponse:
+    """Serve static/login.html, optionally revealing the error banner.
+    `error` is always one of our fixed strings — never user input."""
+    html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+    if error:
+        html = html.replace('<div id="login-error" hidden></div>',
+                            f'<div id="login-error">{error}</div>')
+    return HTMLResponse(html, status_code=401 if error else 200)
+
+
+@app.get("/login")
+async def login_form(request: Request):
+    if not auth.enabled() or auth.token_valid(
+            request.cookies.get(auth.COOKIE_NAME, "")):
+        return RedirectResponse(url="./")
+    return _login_page()
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    if not auth.enabled():
+        return RedirectResponse(url="./", status_code=303)
+    # Parse the urlencoded form body ourselves — request.form() would pull in
+    # the python-multipart dependency for what is two known fields.
+    form = parse_qs((await request.body()).decode("utf-8", "replace"))
+    username = (form.get("username") or [""])[0]
+    password = (form.get("password") or [""])[0]
+    if not auth.check_credentials(username, password):
+        log.warning("Failed login attempt for user %r", username)
+        return _login_page("Wrong username or password.")
+    resp = RedirectResponse(url="./", status_code=303)
+    resp.set_cookie(auth.COOKIE_NAME, auth.mint_token(),
+                    max_age=auth.cookie_max_age(), httponly=True,
+                    samesite="lax", secure=_is_https(request),
+                    path=_COOKIE_PATH)
+    log.info("User %r logged in", username)
+    return resp
+
+
+@app.get("/logout")
+async def logout():
+    resp = RedirectResponse(url="login")
+    resp.delete_cookie(auth.COOKIE_NAME, path=_COOKIE_PATH)
+    return resp
+
+
 def _origin_allowed(ws: WebSocket) -> bool:
     """WebSocket Origin gate, active only when ALLOWED_ORIGINS is set.
 
@@ -57,6 +140,11 @@ def _origin_allowed(ws: WebSocket) -> bool:
 async def ws_endpoint(ws: WebSocket):
     """One browser connection == one Bridge to the NIM, capped at MAX_SESSIONS."""
     global _active_sessions
+    # HTTP middleware doesn't cover websockets — enforce the login here too.
+    if auth.enabled() and not auth.token_valid(ws.cookies.get(auth.COOKIE_NAME, "")):
+        log.warning("Rejecting browser: not logged in")
+        await ws.close(code=1008)
+        return
     if not _origin_allowed(ws):
         log.warning("Rejecting browser: origin %r not allowed", ws.headers.get("origin"))
         await ws.close(code=1008)  # rejects the handshake (policy violation)
@@ -251,7 +339,8 @@ async def index():
         html = html.replace("/static/", f"{BASE_PATH}/static/")
     html = html.replace(
         "<head>",
-        f'<head>\n  <script>window.__BASE__ = "{BASE_PATH}";</script>',
+        f'<head>\n  <script>window.__BASE__ = "{BASE_PATH}"; '
+        f'window.__AUTH__ = {str(auth.enabled()).lower()};</script>',
         1,
     )
     return HTMLResponse(html)

@@ -148,7 +148,9 @@ basis.
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/` | GET | Serves `index.html`, injecting `window.__BASE__` and prefixing static URLs |
+| `/` | GET | Serves `index.html`, injecting `window.__BASE__` / `window.__AUTH__` and prefixing static URLs |
+| `/login` | GET/POST | Login page (`static/login.html`) / credential check → signed session cookie. Only active when `AUTH_USERNAME`+`AUTH_PASSWORD` are set; otherwise redirects home |
+| `/logout` | GET | Clears the session cookie and returns to the login page |
 | `/static/*` | GET | Static assets |
 | `/sdk/asr-client.js` | GET | The headless client SDK (readable source, from `packages/asr-client/src`) |
 | `/config` | GET | Non-secret client config + per-connection ASR **defaults**: `{sample_rate, language, model, llm, llm_model, sessions, diarization, max_speakers, auto_punct, endpointing}` |
@@ -189,6 +191,7 @@ response.
 | `NIM_API_KEY` | `Authorization` header on the server→NIM connection | No |
 | `LLM_API_KEY` | `Authorization` header on the server→LLM call | No |
 | `ADMIN_TOKEN` | comparing the `X-Admin-Token` header; exposed only as `bool` → `auth_required` | No — only its presence |
+| `AUTH_USERNAME` / `AUTH_PASSWORD` | comparing the login form fields (constant-time); deriving the cookie-signing key | No — the cookie holds only an expiry + HMAC |
 | `LLM_BASE_URL` | the server→LLM request URL; exposed only as `bool` → `llm` | No — only its presence |
 | `NIM_HOST` / NIM URL | building the NIM WebSocket URL | No — the browser talks to the same-origin `/ws` |
 
@@ -204,6 +207,18 @@ adds CORS to the HTTP API **and** an `Origin` gate on `/ws` for pages using the
 client SDK from other web apps; same-host pages and non-browser clients always
 pass. Note the WS gate is a *tightening*: without it, any page can open `/ws`
 (WebSockets aren't subject to the same-origin policy).
+
+**Optional login (`AUTH_USERNAME` / `AUTH_PASSWORD`):** when both are set, an
+HTTP middleware (plus an explicit check on the `/ws` handshake, which
+middleware doesn't cover) requires a signed session cookie for everything
+except `/login`, `/logout`, `/static/*`, and `/sdk/*`; browsers hitting `/`
+are redirected to the login page, API calls get a `401`. The cookie value is
+`<unix expiry>.<HMAC-SHA256>` signed with a key derived from the credentials
+(`auth.py`), so it is stateless, survives restarts, and changing the
+credentials invalidates every outstanding session. Note that cross-origin SDK
+embedding (`ALLOWED_ORIGINS`) does not compose with the login — third-party
+pages have no way to obtain the cookie — so enable auth only on deployments
+where the app itself is the consumer.
 
 **Information disclosure to note:** `/config` is unauthenticated, so any visitor
 who can load the page can see the **model names** (`model` = ASR model,
@@ -341,6 +356,7 @@ Full table in the [`README.md`](../README.md#settings-in-go). Key groups:
 | Capacity | `MAX_SESSIONS`, `AUDIO_QUEUE_MAX` |
 | LLM | `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_SYSTEM_PROMPT`, `LLM_TEMPERATURE`, `LLM_MAX_TOKENS`, `LLM_TIMEOUT_SEC` |
 | Analyzers | `ANALYZERS_CONFIG`, `ANALYZER_MIN_CHARS`, `ADMIN_TOKEN` |
+| Login | `AUTH_USERNAME`, `AUTH_PASSWORD`, `AUTH_TTL_HOURS` |
 | Serving | `BASE_PATH`, `ALLOWED_ORIGINS`, `SSL_CERT`, `SSL_KEY` (native: `HOST`, `PORT`) |
 | Debug | `DEBUG`, `DEBUG_AUDIO_DIR` |
 

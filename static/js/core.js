@@ -20,6 +20,7 @@ const els = {
   dot: document.getElementById("dot"),
   state: document.getElementById("state"),
   themeToggle: document.getElementById("theme-toggle"),
+  logout: document.getElementById("logout"),
   transcript: document.getElementById("transcript"),
   interim: document.getElementById("interim"),
   elapsed: document.getElementById("elapsed"),

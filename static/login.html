@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EVL ASR — Login</title>
+  <link rel="icon" type="image/png" href="static/favicon.png" />
+  <!-- Apply a saved light/dark choice before first paint (avoids a flash). -->
+  <script>try{var t=localStorage.getItem("asr.theme");if(t)document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+  <link rel="stylesheet" href="static/style.css" />
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <form class="login-card" method="post" action="login">
+      <div class="login-brand">
+        <img src="static/favicon.png" alt="" />
+        <h1>EVL <span>ASR</span></h1>
+      </div>
+      <h2>Login</h2>
+      <label for="login-user">Username</label>
+      <input id="login-user" name="username" type="text"
+             autocomplete="username" autocapitalize="none" autofocus required />
+      <label for="login-pass">Password</label>
+      <div class="login-pass">
+        <input id="login-pass" name="password" type="password"
+               autocomplete="current-password" required />
+        <button type="button" id="login-eye" title="Show password"
+                aria-label="Show or hide the password">👁️</button>
+      </div>
+      <div id="login-error" hidden></div>
+      <button type="submit" class="primary">Login</button>
+    </form>
+    <div class="login-note">Please log in to use the transcription service.</div>
+  </div>
+  <script>
+    // Show/hide the password, as on the arcade control page.
+    var pass = document.getElementById("login-pass");
+    var eye = document.getElementById("login-eye");
+    eye.onclick = function () {
+      var show = pass.type === "password";
+      pass.type = show ? "text" : "password";
+      eye.textContent = show ? "🙈" : "👁️";
+      eye.title = show ? "Hide password" : "Show password";
+      pass.focus();
+    };
+  </script>
+</body>
+</html>

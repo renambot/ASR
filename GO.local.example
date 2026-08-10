@@ -12,3 +12,7 @@ export LLM_API_KEY=""      # bearer token for that endpoint
 
 # export NIM_API_KEY=""    # bearer token for the ASR NIM
 # export ADMIN_TOKEN=""    # shared secret for the Admin tab
+
+# Web login (set both to put the app behind a login page):
+# export AUTH_USERNAME=""
+# export AUTH_PASSWORD=""

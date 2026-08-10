@@ -66,3 +66,7 @@ documented in `docs/architecture.md` (also published to the GitHub wiki) and
 - Analyzers are per-session: the `/ws` `analyzers` param defaults **on** when
   absent (app/back-compat) but the SDK sends `analyzers=0` unless the
   consumer opts in.
+- Under the `BASE_PATH` mount, HTTP middleware on the inner app still sees the
+  **full** path in `scope["path"]` (prefix in `root_path`) — strip it before
+  matching routes. And middleware never runs for WebSockets: gate `/ws` inside
+  the endpoint.

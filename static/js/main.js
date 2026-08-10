@@ -87,6 +87,13 @@ if (window.matchMedia) {
 }
 syncThemeButton();
 
+// ---- Logout (button only shown when the server requires a login) ----------
+// __AUTH__ is injected by the server next to __BASE__ (see routes.py).
+if (window.__AUTH__) {
+  els.logout.hidden = false;
+  els.logout.onclick = () => { location.href = "logout"; };
+}
+
 // --- Bootstrap on page load ---
 // Populate device list on load (labels appear after permission is granted).
 listDevices();
