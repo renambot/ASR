@@ -22,8 +22,13 @@ def enabled() -> bool:
 
 
 def _key() -> bytes:
-    return hashlib.sha256(
-        f"asr-auth|{AUTH_USERNAME}|{AUTH_PASSWORD}".encode()).digest()
+    return hashlib.pbkdf2_hmac(
+        "sha256",
+        AUTH_PASSWORD.encode(),
+        f"asr-auth|{AUTH_USERNAME}".encode(),
+        600_000,
+        dklen=32,
+    )
 
 
 def _sign(expiry: str) -> str:
