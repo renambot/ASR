@@ -273,8 +273,9 @@ async def llm_process(payload: dict):
         system = (payload.get("instruction") or "").strip() or LLM_SYSTEM_PROMPT
     try:
         out = await llm_chat(system, text)
-    except RuntimeError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=502)
+    except RuntimeError:
+        log.exception("LLM processing failed")
+        return JSONResponse({"error": "LLM request failed."}, status_code=502)
     if match is not None:
         out["analyzer"] = match["name"]
     log.info("LLM processed %d chars -> %d chars (model=%s, analyzer=%s)",
