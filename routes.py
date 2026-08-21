@@ -224,7 +224,8 @@ async def admin_put_analyzers(request: Request):
         payload = await request.json()
         new = _validate_analyzers(payload.get("analyzers"))
     except (json.JSONDecodeError, ValueError) as exc:
-        return JSONResponse({"error": str(exc)}, status_code=400)
+        log.warning("Rejected analyzer update payload: %s", exc)
+        return JSONResponse({"error": "Invalid analyzer payload."}, status_code=400)
     analyzers.replace(new)
     saved = save_analyzers()
     log.info("Admin updated analyzers: %d item(s), persisted=%s", len(new), saved)
