@@ -320,7 +320,8 @@ async def analyze(payload: dict):
         try:
             out = await llm_chat(prompt, user)
         except RuntimeError as exc:
-            results.append({"id": aid, "name": name, "error": str(exc)})
+            log.exception("analyze: analyzer '%s' (%s) failed", name, aid)
+            results.append({"id": aid, "name": name, "error": "Analyzer execution failed."})
             prev_ran = False
             continue
         results.append({"id": aid, "name": name, "result": out["result"]})
