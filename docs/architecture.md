@@ -403,4 +403,49 @@ defaults.
 - **Debugging:** `DEBUG=true` logs per-frame/per-event detail; `DEBUG_AUDIO_DIR`
   writes the forwarded PCM to a WAV, and the **Save WAV** button downloads
   exactly what the browser captured.
+
+### Load testing
+
+`tools/loadtest.py` impersonates N concurrent browser sessions: each opens
+`/ws` and streams a real-speech WAV (the app's **Save WAV** output is the
+ideal source) as real-time 100 ms PCM frames, then reports connection
+outcomes, **time-to-first-interim** (TTFI) latency, and per-session
+transcript throughput.
+
+```sh
+.venv/bin/python tools/loadtest.py \
+    --server wss://host/speech --wav mytalk.wav \
+    --sessions 1,5,10,20,40 --duration 90 [--user U --password P] \
+    [--diarization] [--analyzers]
 ```
+
+Safe by default: sessions send `analyzers=0` and close without `stop`, so no
+LLM calls are triggered. **Method:** temporarily raise `MAX_SESSIONS` (in
+`GO.local`) so the cap isn't what you measure, ramp the session count, and
+watch for the capacity knee — first the TTFI p50↔max gap widens (stragglers
+queuing), then p50 climbs and per-session finals/chars sag, then errors
+appear. Set `MAX_SESSIONS` below the knee.
+
+**Reference run (2026-07):** NIM on an **NVIDIA H100 80 GB**, plain
+transcription (no diarization, no analyzers), one 16 kHz speech WAV looped in
+real time by every session:
+
+| Sessions | ok / full / err | TTFI p50 | TTFI max | finals/sess | chars/sess |
+|---:|:---:|---:|---:|---:|---:|
+| 1   | 1 / 0 / 0   | 2.08 s | 2.08 s | 12.0 | 744 |
+| 5   | 5 / 0 / 0   | 2.08 s | 2.08 s | 12.0 | 744 |
+| 10  | 10 / 0 / 0  | 2.08 s | 2.08 s | 12.0 | 744 |
+| 20  | 20 / 0 / 0  | 2.09 s | 2.10 s | 12.0 | 744 |
+| 40  | 40 / 0 / 0  | 2.09 s | 2.12 s | 12.0 | 742 |
+| 60  | 60 / 0 / 0  | 2.10 s | 2.12 s | 12.0 | 743 |
+| 80  | 80 / 0 / 0  | 2.11 s | 2.20 s | 12.1 | 757 |
+| 100 | 100 / 0 / 0 | 2.12 s | 2.15 s | 12.3 | 775 |
+
+**No knee found through 100 concurrent streams** — TTFI grew only ~40 ms
+end-to-end, the p50↔max spread stayed within ~130 ms, and per-session output
+never sagged (the slight rise at high N is a harness artifact: the shared
+level deadline gives earlier-connected sessions a few extra seconds of
+audio). Plain-transcription capacity on this hardware exceeds 100 sessions.
+The governing number for `MAX_SESSIONS` should come from a ramp in the
+production configuration (`--diarization`, and `--analyzers` at modest N —
+it spends real LLM tokens), which costs more per stream.
